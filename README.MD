@@ -20,6 +20,12 @@ Platform-neutral, bounded, non-blocking serial byte endpoint contracts for the E
 
 **Concurrency:** this is NOT a multiproducer frame atomic sink. The application must compose exclusive ownership/EDP-Threading serialization around an endpoint and handle partial writes across possible interleavers. An EDP-Logging Serial sink must own complete EDLG frames/queued output, and its UART/USB provider must expose capabilities via Bootstrap.
 
+## Optional complete-frame EDLG Serial sink bridge (partial)
+
+The optional header `<serial/EdlgFramePump.hpp>` composes the **canonical EDP-Logging EDLG frame writer** with this library's own bounded `ByteWriteEndpoint` consumer. It owns one fixed-size complete frame (header/CRC/payload/trailer) across partial native writes and preserves exact accepted-prefix progress across `WouldBlock` or provider failures. `Begin` rejects a new record while a frame is pending, so no record is silently replaced. `Pump` never retries WouldBlock or assumes that accepted bytes reached the host. The application MUST reserve the **whole physical/USB endpoint exclusively across all pump calls**: another writer could still interleave bytes otherwise.
+
+This feature activates a **conditional direct EDP-Serial→EDP-Logging source dependency** ONLY when the header is imported by the application; `ESPressio_Serial.hpp` and the default `library.json` dependency on EDP-System remain unchanged. **No Logging→Serial reverse dependency**. It is NOT a concrete Arduino/ESP-IDF UART sink, complete-frame arbitration, secure archive or HIL proof. GCC/Clang host PASS and Xtensa syntax-only PASS on RPI400, see [optional EDLG frame pump](docs/EDLG-FRAME-PUMP.MD), [Wiki](wiki/Reference-serial-EdlgFramePump.md), and [Dependencies](DEPENDENCY_GRAPH.MD). Run `EDP_LOGGING_SOURCE_DIR=/path/to/EDP-Logging EDP_SYSTEM_SOURCE_DIR=/path/to/EDP-System CXX=g++ bash tests/run_logging_frame_host_tests.sh` (also `clang++`).
+
 ## Tests
 
 C++20 strict host suite: `CXX=g++ bash tests/run_host_tests.sh`, repeat with `CXX=clang++`. Fake providers exercise empty input, partial progression, WouldBlock, provider failure after partial progress and invalid-contract reports. Real ESP32 target builds and physical Serial capture are future tranches. Existing `main` stub is unchanged.

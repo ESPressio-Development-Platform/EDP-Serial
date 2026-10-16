@@ -8,4 +8,6 @@
 
 **Composition/dependencies:** C++20 standard library plus **EDP-System** Composition abstraction. No platform-specific provider is imported. Future concrete providers depend on the abstract `EDP-Serial`; an optional Serial sink integration can depend on `EDP-Logging` behind a declared condition but **EDP-Logging MUST NOT depend on Serial**. No legacy `ESPressio-*` library source.
 
+**Optional downstream EDLG frame bridge:** `serial/EdlgFramePump.hpp` is imported only when an application opts in and declares a direct EDP-Logging dependency. It reuses Logging's EDLG writer, owns one complete frame in bounded static memory and resumes exact suffix byte output across native partial-write failures. It does NOT arbitrate multiple independent producers sharing the actual UART/CDC/USB endpoint, and does NOT guarantee physical transmission, transport flush or durable LogRecord delivery. See `docs/EDLG-FRAME-PUMP.MD`.
+
 **Outstanding:** application/target concrete providers, DMA-specific borrowed-lifetime capability, partial UART/CDC/USB writes, IRQ behavior, lifetime/DMA ownership, select hardware, secure console arbitration, Logging sink, host capture and on-device tests. Package version stays **0.1.0**. These remain gates before claiming a usable physical Serial endpoint.
