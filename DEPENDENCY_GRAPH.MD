@@ -13,6 +13,27 @@ The **only direct EDP dependency** is EDP-System's static Composition Framework.
 
 No EDP-Logging, EDP-Memory, EDP-Threading, platform SDK, Arduino/ESP-IDF concrete or deprecated `ESPressio-*` repository is consumed by this domain. Host tests use a fake provider deriving from `EDP-System::CompositionFramework::Provider`, with exact source/include root controlled by `EDP_SYSTEM_SOURCE_DIR`.
 
+## Optional EDLG FIFO (activated only by explicit header import)
+
+`<serial/BoundedEdlgFrameQueue.hpp>` enables two direct conditional dependencies of **EDP-Serial** in addition to its mandatory EDP-System domain:
+
+- **EDP-Logging** (existing optional pure C++20 canonical EDLG writer, through the previously introduced `EdlgFramePump.hpp`). The default Logging umbrella remains free of Serial; the direction is **Serial→Logging only**, with no reverse edge.
+- **EDP-Threading** `OrdinaryMutex<Identity>` abstract Composition provider, with a single native NoWait TryAcquire and typed Release. Threading's owner graph already includes EDP-System, EDP-Platform, EDP-Clock, EDP-Memory and EDP-BoundedTopology as declared in Threading's dependency graph. This does not select a concrete platform Mutex in EDP-Serial.
+
+```text
+EDP-Serial (optional FIFO profile)
+├── EDP-System [mandatory baseline]
+├── EDP-Logging [conditional EDLG framing, no reverse edge]
+└── EDP-Threading [conditional ordinary-context mutex abstraction]
+    ├── EDP-System
+    ├── EDP-Platform -> EDP-System
+    ├── EDP-Clock -> EDP-Platform, EDP-System
+    ├── EDP-BoundedTopology
+    └── EDP-Memory -> EDP-Platform, EDP-System, EDP-BoundedTopology
+```
+
+The opt-in application manifest must name all **actually activated direct edges**; the default `library.json` remains System-only. No circular dependencies or platform-specific concrete import were added by the FIFO.
+
 ## Future conditional graphs — NOT activated by current code
 
 - `EDP-Serial-Arduino -> EDP-Serial` with platform-specific concrete UART/USB provider and its own necessary platform abstraction/SDK edges

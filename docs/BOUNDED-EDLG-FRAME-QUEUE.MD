@@ -1,0 +1,34 @@
+# Opt-in bounded EDLG Serial FIFO — composed Threading mutual exclusion
+
+**Branch:** EDP-Serial `feature/logging-v1`, version **0.1.0**. Header `<serial/BoundedEdlgFrameQueue.hpp>` is **conditional**; default `ESPressio_Serial.hpp` and its System-only default package metadata remain unchanged.
+
+## Activated optional dependencies
+
+This opt-in adapter depends **directly** on:
+- **EDP-Serial** platform-neutral composition-qualified ByteWriteEndpoint and previously owner-qualified `EdlgFramePump<TMaxPayload>`.
+- **EDP-Logging** canonical `WriteEdlgFrame` from the existing EDLG v1 pure C++20 source. This is **EDP-Serial→EDP-Logging**, no reverse edge, and no new CRC/CBOR encoder.
+- **EDP-Threading** ordinary-context `OrdinaryMutex<Identity>` abstraction. The supplied provider must be declared through the existing EDP-System Composition Framework (advertising its own semantic `Identity`), with **typed noexcept `TryAcquire()` and `Release()`**. Application Bootstrap selects the Platform-native concrete Mutex provider; EDP-Serial imports **no** platform-specific EDP implementation or SDK. EDP-Threading's transitives are EDP-System/Platform/Clock/Memory/BoundedTopology; applications importing this header must declare their direct activated dependencies, not rely on accidental transitive inclusion.
+
+## State and operations
+
+`BoundedEdlgFrameQueue<TFrameCapacity,TMaximumPayloadBytes,TMutexProvider>` is static, non-copyable, non-movable, and owns one `std::array<EdlgFramePump<TMaxPayload>,TFrameCapacity>` plus fixed FIFO head/tail and a lock-free atomic depth. Memory bound is proportional to `TFrameCapacity * (TMaximumPayloadBytes+20)` plus counters/pump metadata; all capacities are compile-time. No alloc/free, virtual dispatch, runtime type registry, additional task, private WaitPoint or invented clock.
+
+`TryEnqueue(EdlgCodec,encodedPayload) noexcept` performs exactly one **Threading::OrdinaryMutexProvider::TryAcquire()** (native NoWait), never blocks waiting for queue access, and atomically checks finite capacity, copies one fully formatted framed EDLG record into the next frame pump, advances the FIFO tail and releases the same composed mutex. Typed `EdlgQueueOfferResult` reports `Queued`, `Full`, `LockUnavailable`, `MutexProviderFailure`, `InvalidCodec`, `InvalidPayload`, `QueuedButLockReleaseFailed`, `Poisoned`, plus **`FrameWasQueued`** and **`DepthAfterAttempt`**. If provider lock release fails after successful insertion, the record REMAINS queued and the caller is told that fact explicitly; the queue becomes **permanently fail-closed** until application reinitialises safely. It does NOT silently retry the same Record or claim it was lost.
+
+`PumpNext(EDP-Serial::ByteWriteEndpoint) noexcept` obtains the **same** composed Threading mutex with NoWait and holds it across the bounded `EdlgFramePump::Pump` and head removal if fully accepted. On WouldBlock, partial byte-provider failure or malformed endpoint response, the head and its partially accepted count remain owned; no next frame can be published to the endpoint ahead of that incomplete head. `EdlgQueuePumpResult` returns `Empty`, `Complete`, `WouldBlock`, `ProviderFailure`, `EndpointContractViolation`, `LockUnavailable`, `MutexProviderFailure`, `LockReleaseFailed`, `Poisoned`, along with `FrameCompleted`, cumulative `AcceptedFrameBytes`, `TotalFrameBytes` and `QueueDepth`. If a native mutex release fails after a completed frame, the result says so **while separately marking FrameCompleted=true**. No ambiguous second submission or false durability claim is made.
+
+`Depth()` is an atomic snapshot and `Poisoned()` is an atomic sticky fault indicator. Queue access is ordinary-context only. Native endpoints MUST synchronously accept/copy bytes before returning as stated by the EDP-Serial ByteStreamWriter capability; asynchronous DMA borrowing needs a distinct explicit ownership contract.
+
+### Correctness boundaries
+
+- **FIFO applies to records successfully admitted into this single queue**, not scheduling fairness among competing producer Threads that fail TryAcquire/Full. No thread is starved intentionally, but no bounded fairness is proven.
+- The queue prevents interleaving only for **participants using this one queue and exclusive endpoint provider**. A direct UART `printf`, a second queue or console stack using the SAME endpoint outside it can still interleave bytes. Application Bootstrap must give this queue exclusive byte-stream ownership across its entire lifetime.
+- Holding the ordinary mutex during `PumpNext` controls current and future participating producers; it is NOT a native UART output or physical transmission lock, nor a strict wall-clock bound on provider latency. EDP-Serial's endpoint contract requires immediate nonblocking acceptance behavior but real provider/HIL latency proof is pending.
+- **Never destroy a queue while `Depth()!=0` or native endpoint has outstanding asynchronous data.** This API currently has no stop/seal + durable loss-provenance contract, no transport reset, no NVRAM archive and no automatic background worker. An application worker must run PumpNext and manage backpressure/timeout policies. Do not claim EDLG messages are flushed/durable/received merely because PumpNext returns Complete.
+- Poison is sticky on Threading mutex Release failure. A caller cannot safely resume using a potentially still-owned mutex; reinitialization and externally documented loss accounting are required. No unsafe Reset() method is exposed.
+
+## Host tests and target probe
+
+`tests/BoundedEdlgFrameQueueTests.cpp` + `tests/run-bounded-edlg-queue-tests.sh`: a host fake provider **advertises the real EDP-Threading OrdinaryMutex Composition offer**, implements ordinary-context `std::mutex::try_lock` only, and the output sink advertises the genuine EDP-Serial ByteStreamWriter offer. Tests verify: FIFO across 3 distinct EDLG frames with first frame 5-byte partial → WouldBlock → partial native provider failure → later completion, Python/C++ compatible `ReadEdlgFrame` strict frame CRC/total stream validation, full queue without mutation, 12 rounds of **eight concurrent producer threads** with no duplication/loss or byte interleaving, native Mutex contention, InvalidCodec/Payload, native Acquire failure, lock Release failure both after queue acceptance and after full frame output (poison and completed flag), and no work after poison.
+
+RPI400 C++20 **GCC+Clang PASS** native run **`20261016T085921-068e380e`** (original first-version suite PASS `20261016T085831-37409e5c`). **Xtensa ESP32 C++20 syntax-only** opt-in provider/queue/pump instantiation PASS `20261016T090015-492b0459`. This is NOT an actual linked ESP-IDF/Arduino firmware, FreeRTOS interleaving trace or physical Serial delivery proof. See [Wiki reference](../wiki/Reference-serial-BoundedEdlgFrameQueue.md) and [Dependency Graph](../DEPENDENCY_GRAPH.MD).
