@@ -1,0 +1,29 @@
+{
+  "name": "EDP-Serial",
+  "version": "0.1.0",
+  "description": "Platform-neutral, bounded byte endpoint contracts for ESPressio",
+  "keywords": "espressio,serial,embedded,transport",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ESPressio-Development-Platform/EDP-Serial.git"
+  },
+  "license": "Apache-2.0",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "flags": [
+      "-std=gnu++20"
+    ],
+    "unflags": [
+      "-std=gnu++11",
+      "-std=gnu++14",
+      "-std=gnu++17"
+    ]
+  },
+  "dependencies": [
+    {
+      "name": "EDP-System",
+      "version": "0.1.0"
+    }
+  ]
+}
