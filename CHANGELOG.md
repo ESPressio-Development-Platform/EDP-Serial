@@ -12,6 +12,10 @@ All current repository versions remain **0.1.0**. These are untagged development
 - Optional `BoundedEdlgFrameQueue` using an application-supplied EDP-Threading ordinary-context keyed Mutex and fixed-capacity FIFO of complete EDLG frames. Finite NoWait producer lock, stable FIFO order, typed contention/provider faults, fail-closed poison on uncertain native lock release.
 - Strict GCC/Clang host tests (real source, simulated byte endpoint and Threading Mutex), source-specific V2 Wiki and three separate **Arduino IDE/PlatformIO Arduino-ESP32/PlatformIO ESP-IDF** demonstrator families. Each demo uses a single-context fake provider; *no physical serial TX* is implied by its compilation.
 
+### Portability fixes
+
+- Replaced the private FIFO poison latch's `std::atomic<bool>` with the already qualified always-lock-free `std::atomic<std::size_t>` 0/1 representation. This addresses the ESP32-WROOM Arduino core's actual `atomic<bool>::is_always_lock_free == false` compile failure without changing the public API, failure semantics, memory model or 0.1.0 version.
+
 ### Deliberate limits
 
 - This platform-neutral repository never selects UART pins, baud, DMA/USB transfer, ESP-IDF native driver, Arduino HardwareSerial or a free-running worker. EDP-Serial-ESP-IDF owns the existing native UART TX FIFO concrete; EDP-Serial-Arduino is a separate future owner.
