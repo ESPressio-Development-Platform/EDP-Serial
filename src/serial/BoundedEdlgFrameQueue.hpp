@@ -1,7 +1,7 @@
 #pragma once
 
 #include <array>
-#include <atomic>
+#include <exception>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
@@ -63,11 +63,19 @@ namespace ESPressio::Serial {
     template<
         std::size_t TFrameCapacity,
         std::size_t TMaximumPayloadBytes,
-        class TMutexProvider
+        class TMutexProvider,
+        class TStateSpinLockProvider
     >
     class BoundedEdlgFrameQueue final {
         static_assert(TFrameCapacity > 0U);
-        static_assert(std::atomic<std::size_t>::is_always_lock_free);
+        /// The application-selected Platform SpinLock guards the two short
+        /// public state snapshots and sticky failure publication. A native
+        /// Mutex cannot serve this role after its own Release has failed.
+        using SpinLockTraits =
+            ESPressio::Platform::Synchronization::Detail::SpinLockProviderTraits<
+                TStateSpinLockProvider
+            >;
+        static_assert(sizeof(SpinLockTraits) > 0U);
         static_assert(
             std::is_same_v<
                 decltype(std::declval<TMutexProvider&>().TryAcquire()),
@@ -92,17 +100,46 @@ namespace ESPressio::Serial {
         );
 
         TMutexProvider* _mutex;
+        TStateSpinLockProvider* _stateSpin;
         std::array<EdlgFramePump<TMaximumPayloadBytes>,TFrameCapacity> _frames{};
         std::size_t _head{0U};
         std::size_t _tail{0U};
-        std::atomic<std::size_t> _depth{0U};
-        std::atomic<std::size_t> _poisoned{0U};
+
+        // Only the short Platform SpinLock guards these independent facts.
+        // Never hold it during native Mutex acquisition or endpoint I/O.
+        std::size_t _depth{0U};
+        bool _poisoned{false};
+
+        void ReleaseStateSpin() const noexcept {
+            if (_stateSpin->Release() !=
+                ESPressio::Platform::Synchronization::SpinLockReleaseResult::Released) {
+                std::terminate();
+            }
+        }
+
+        void MarkPoisoned() noexcept {
+            _stateSpin->Acquire();
+            _poisoned = true;
+            ReleaseStateSpin();
+        }
+
+        void IncrementDepth() noexcept {
+            _stateSpin->Acquire();
+            ++_depth;
+            ReleaseStateSpin();
+        }
+
+        void DecrementDepth() noexcept {
+            _stateSpin->Acquire();
+            --_depth;
+            ReleaseStateSpin();
+        }
 
         [[nodiscard]] bool ReleaseOrPoison() noexcept {
             if (_mutex->Release() == ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
                 return true;
             }
-            _poisoned.store(1U,std::memory_order_release);
+            MarkPoisoned();
             return false;
         }
 
@@ -111,8 +148,10 @@ namespace ESPressio::Serial {
         }
 
     public:
-        explicit BoundedEdlgFrameQueue(TMutexProvider& mutex) noexcept :
-            _mutex(&mutex) {}
+        explicit BoundedEdlgFrameQueue(
+            TMutexProvider& mutex,
+            TStateSpinLockProvider& stateSpin
+        ) noexcept : _mutex(&mutex), _stateSpin(&stateSpin) {}
 
         BoundedEdlgFrameQueue(const BoundedEdlgFrameQueue&) = delete;
         BoundedEdlgFrameQueue& operator=(const BoundedEdlgFrameQueue&) = delete;
@@ -120,11 +159,17 @@ namespace ESPressio::Serial {
         BoundedEdlgFrameQueue& operator=(BoundedEdlgFrameQueue&&) = delete;
 
         [[nodiscard]] std::size_t Depth() const noexcept {
-            return _depth.load(std::memory_order_acquire);
+            _stateSpin->Acquire();
+            const std::size_t depth = _depth;
+            ReleaseStateSpin();
+            return depth;
         }
 
         [[nodiscard]] bool Poisoned() const noexcept {
-            return _poisoned.load(std::memory_order_acquire) != 0U;
+            _stateSpin->Acquire();
+            const bool poisoned = _poisoned;
+            ReleaseStateSpin();
+            return poisoned;
         }
 
         /// Nonblocking producer offer: one TryAcquire (NoWait) only. A
@@ -154,11 +199,11 @@ namespace ESPressio::Serial {
             EdlgQueueOfferStatus status = EdlgQueueOfferStatus::Full;
             bool queued = false;
 
-            if (_depth.load(std::memory_order_relaxed) < TFrameCapacity) {
+            if (Depth() < TFrameCapacity) {
                 switch (_frames[_tail].Begin(codec,payload)) {
                     case EdlgPumpBeginStatus::Queued:
                         _tail = Next(_tail);
-                        _depth.fetch_add(1U,std::memory_order_release);
+                        IncrementDepth();
                         queued = true;
                         status = EdlgQueueOfferStatus::Queued;
                         break;
@@ -171,13 +216,13 @@ namespace ESPressio::Serial {
                     default:
                         // Busy while a free FIFO slot exists is internal
                         // corruption. Poison rather than misreport capacity.
-                        _poisoned.store(1U,std::memory_order_release);
+                        MarkPoisoned();
                         status = EdlgQueueOfferStatus::Poisoned;
                         break;
                 }
             }
 
-            const auto depth = _depth.load(std::memory_order_relaxed);
+            const auto depth = Depth();
             if (!ReleaseOrPoison()) {
                 return {
                     queued
@@ -209,7 +254,7 @@ namespace ESPressio::Serial {
                 static_cast<void>(ReleaseOrPoison());
                 return {EdlgQueuePumpStatus::Poisoned,false,0U,0U,Depth()};
             }
-            if (_depth.load(std::memory_order_relaxed) == 0U) {
+            if (Depth() == 0U) {
                 const auto released = ReleaseOrPoison();
                 return {
                     released ? EdlgQueuePumpStatus::Empty
@@ -222,7 +267,7 @@ namespace ESPressio::Serial {
             const bool completed = frame.Status == EdlgPumpStatus::Complete;
             if (completed) {
                 _head = Next(_head);
-                _depth.fetch_sub(1U,std::memory_order_release);
+                DecrementDepth();
             }
 
             EdlgQueuePumpStatus resultStatus = EdlgQueuePumpStatus::EndpointContractViolation;
@@ -240,7 +285,7 @@ namespace ESPressio::Serial {
                     resultStatus = EdlgQueuePumpStatus::EndpointContractViolation;
                     break;
             }
-            const auto depth = _depth.load(std::memory_order_relaxed);
+            const auto depth = Depth();
             if (!ReleaseOrPoison()) {
                 resultStatus = EdlgQueuePumpStatus::LockReleaseFailed;
             }
