@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <span>
 
 #include <ESPressio_Serial.hpp>
@@ -47,6 +48,39 @@ namespace Demo {
         }
     };
 
+    // Single-context fake Platform SpinLock: NOT a real concurrent provider.
+    struct ExampleStateSpinLock final : ESPressio::Platform::Framework::Provider<
+        ESPressio::Platform::Domain,
+        ESPressio::Platform::Framework::Offers<
+            ESPressio::Platform::Framework::Offer<
+                ESPressio::Platform::Synchronization::SpinLock,
+                ESPressio::Platform::Framework::PropertyValue<
+                    ESPressio::Platform::Synchronization::SpinLockSupportsInterruptContext,
+                    false
+                >
+            >
+        >
+    > {
+        bool Held{false};
+        void Acquire() noexcept {
+            if (Held) { std::terminate(); }
+            Held = true;
+        }
+        [[nodiscard]] ESPressio::Platform::Synchronization::SpinLockReleaseResult
+        Release() noexcept {
+            if (!Held) { std::terminate(); }
+            Held = false;
+            return ESPressio::Platform::Synchronization::SpinLockReleaseResult::Released;
+        }
+        [[nodiscard]] ESPressio::Platform::Synchronization::SpinLockAcquireResult
+        AcquireFromInterrupt() noexcept {
+            return ESPressio::Platform::Synchronization::SpinLockAcquireResult::UnsupportedInterruptContext;
+        }
+        [[nodiscard]] ESPressio::Platform::Synchronization::SpinLockReleaseResult
+        ReleaseFromInterrupt() noexcept {
+            return ESPressio::Platform::Synchronization::SpinLockReleaseResult::UnsupportedInterruptContext;
+        }
+    };
     struct Endpoint final : Serial::Framework::Provider<
         Serial::Domain,
         Serial::Framework::Offers<
@@ -79,7 +113,10 @@ namespace Demo {
 
     [[nodiscard]] int Run() noexcept {
         ExampleMutex mutex;
-        Serial::BoundedEdlgFrameQueue<2U, 2U, ExampleMutex> queue(mutex);
+        ExampleStateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<
+            2U, 2U, ExampleMutex, ExampleStateSpinLock
+        > queue(mutex,stateSpin);
         Endpoint endpoint;
         const std::array<std::byte, 2U> first{
             std::byte{'{'}, std::byte{'}'}
