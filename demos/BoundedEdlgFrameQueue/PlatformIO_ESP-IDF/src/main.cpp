@@ -60,6 +60,13 @@ namespace Demo {
         >
     > {
         bool Held{false};
+
+        ExampleStateSpinLock() = default;
+        ExampleStateSpinLock(const ExampleStateSpinLock&) = delete;
+        ExampleStateSpinLock& operator=(const ExampleStateSpinLock&) = delete;
+        ExampleStateSpinLock(ExampleStateSpinLock&&) = delete;
+        ExampleStateSpinLock& operator=(ExampleStateSpinLock&&) = delete;
+
         void Acquire() noexcept {
             if (Held) { std::terminate(); }
             Held = true;
