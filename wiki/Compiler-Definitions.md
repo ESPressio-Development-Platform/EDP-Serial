@@ -1,0 +1,5 @@
+# Compiler definitions and conditional compilation
+
+**Source policy:** C++20 (ordinary `-std=gnu++20` selection on the supported ESP32 Arduino/ESP-IDF build environments). The maintained Serial production headers define **no package-wide `#define` feature flags** and enable no optional Logging/Threading dependency through macros. Instead, importing `<serial/EdlgFramePump.hpp>` explicitly activates the EDP-Logging framing owner; importing `<serial/BoundedEdlgFrameQueue.hpp>` explicitly activates the EDP-Threading ordinary Mutex provider. These header choices are compile-time/application selections, not hidden toolchain knobs.
+
+Each V2 PIO demo manifests `framework=arduino` or `espidf`, pins the PIOArduino platform source revision, removes obsolete language standard flags and requests C++20. Arduino IDE must use a C++20-capable Arduino-ESP32 core; changing an app's compile flags does not authorize unsupported native platform providers. No Serial firmware code includes debug-only macros that can change wire semantics or persistence in a release build.

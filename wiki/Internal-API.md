@@ -1,0 +1,5 @@
+# Internal and cross-repository provider contracts
+
+Although `serial/ByteEndpoint.hpp` is public, its `ByteWriteEndpoint<TEndpoint>` compile-time provider check is a **cross-repository INTERNAL PROVIDER CONTRACT** for separate concrete owners such as EDP-Serial-ESP-IDF. It binds the EDP-System Composition `Offers<ByteStreamWriter>` declaration and exact `noexcept TryWrite(span<const byte>) -> ByteWriteResult`, not merely a coincidental method name. The static Type `Serial::Domain` and unique capability identity must never be silently duplicated by an SDK provider.
+
+The optional queue's Type checks are similarly **internal EDP-Threading integration contracts**: one borrowed `TMutexProvider` with `Identity`, `CompositionOffers::Contains<OrdinaryMutex<Identity>>`, typed `TryAcquire()` and `Release()` result and noexcept; `TryAcquire` is NoWait and must not block. EDP-Logging's canonical EDLG frame writer and reader remain internal cross-repo format contracts for optional Serial frame transport. No alternative CRC or frame format is introduced here.

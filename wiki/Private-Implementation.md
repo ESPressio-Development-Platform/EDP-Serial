@@ -1,0 +1,7 @@
+# Private implementation and retained state
+
+The abstract `TryWriteComplete` implementation has only local `accepted` and `remaining` counts; each Accepted report must advance positively, ensuring at most the offered byte length of provider calls. The function never stores caller source bytes, extends an input span beyond the call, sleeps or allocates; a ProviderFailure report can still have accepted a prefix.
+
+The opt-in `EdlgFramePump` has private **`_buffer`** (fixed complete EDLG bytes), **`_size`** (written complete frame), **`_accepted`** (prefix consumed by native provider) and **`_pending`** (exclusive in-flight frame). A new Begin must not overwrite a pending frame; a bounded Pump offers only the exact remaining suffix and clears state only after complete provider acceptance. Concurrent calls require the caller's external owner.
+
+The opt-in `BoundedEdlgFrameQueue` retains private **`_mutex`** (borrowed stable Threading provider), **`_frames`** (statically bounded pumps), **`_head`**, **`_tail`**, atomic **`_depth`** and atomic **`_poisoned`**. `ReleaseOrPoison` is the only final lock-return transition, permanently marking the queue unusable on uncertain native release. `Next` wraps exactly at compile-time frame capacity, not an unbounded generation counter. `TryEnqueue` holds the borrowed Mutex for insertion, and `PumpNext` holds it for one bounded endpoint pass. Complete native callback duration is not bounded by the queue's own NoWait locking; sender must supply a nonblocking provider.

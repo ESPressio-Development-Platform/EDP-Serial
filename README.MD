@@ -2,7 +2,7 @@
 
 Platform-neutral, bounded, non-blocking serial byte endpoint contracts for the ESPressio Development Platform.
 
-**Status:** initial **abstraction-only** feature on `feature/logging-v1`, version **0.1.0**. There is **no Arduino/ESP-IDF concrete provider, UART setup, USB/CDC deployment, Logging sink, hardware demo or device qualification** yet. Not an operational serial transport in isolation.
+**Status:** source-complete platform-neutral Serial abstraction plus optional EDLG frame-pump and bounded FIFO, under `feature/logging-v1`, version **0.1.0**. A separate ESP-IDF native UART concrete exists in **EDP-Serial-ESP-IDF**; this abstract library itself does not configure UART/USB, own a console, start a worker or guarantee wire delivery. Target demonstration builds are being independently qualified before any `main` promotion.
 
 ## Public API
 
@@ -34,6 +34,12 @@ This feature activates a **conditional direct EDP-Serial→EDP-Logging source de
 
 ## Tests
 
-C++20 strict host suite: `CXX=g++ bash tests/run_host_tests.sh`, repeat with `CXX=clang++`. Fake providers exercise empty input, partial progression, WouldBlock, provider failure after partial progress and invalid-contract reports. Real ESP32 target builds and physical Serial capture are future tranches. Existing `main` stub is unchanged.
+C++20 strict host suite: `CXX=g++ bash tests/run_host_tests.sh`, repeat with `CXX=clang++`. Fake providers exercise empty input, partial progression, WouldBlock, provider failure after partial progress and invalid-contract reports. Existing strict host tests passed against the exact selected source and the post-Logging-main downstream matrix. New three-layout examples for all three logical features are under [demos](demos/README.MD); target builds and native physical Serial capture remain separate acceptance evidence and must not be inferred merely from committed example source. Existing `main` remains a stub until guarded qualification/promotion.
 
 [Architecture](docs/ARCHITECTURE.MD) • [Dependencies](DEPENDENCY_GRAPH.MD) • [Wiki](wiki/Home.md)
+
+## Release integration and examples — 12 November 2026
+
+The [three V2 demo families](demos/README.MD) demonstrate the exact bounded byte endpoint, EDLG frame pump and ordinary-keyed FIFO contracts, each with Arduino IDE, PlatformIO Arduino-ESP32 and PlatformIO ESP-IDF source entry points. They use **memory-only fake endpoint providers**: this is intentionally not a real UART peripheral/USB output demonstration. Native provider selection belongs to the application and concrete repository. `EDP-Serial-Arduino` is currently a placeholder; do not infer an Arduino Serial concrete from these examples. The ESP-IDF UART concrete is separately implemented under `EDP-Serial-ESP-IDF`.
+
+The [changelog](CHANGELOG.md), [full dependency graph](DEPENDENCY_GRAPH.MD), [normative architecture](docs/ARCHITECTURE.MD), [Wiki API](wiki/Public-API.md) and [build evidence](wiki/Build-Test-and-Source.md) describe the 0.1.0 contract. No release tag is created by these documentation updates. A passing source build establishes syntax/link compatibility on that selected target, not native FIFO drain, connected peer receipt, duration bounds, security or physical PowerLoss durability.
