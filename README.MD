@@ -19,6 +19,8 @@ EDP-Serial [only when <serial/EdlgFramePump.hpp> is imported]
 EDP-Serial [only when <serial/BoundedEdlgFrameQueue.hpp> is imported]
 ├── EDP-System [mandatory default]
 ├── EDP-Logging [conditional canonical EDLG; no reverse edge]
+├── EDP-Platform [conditional short independent SpinLock; depth/poison]
+│   └── EDP-System
 └── EDP-Threading [conditional ordinary keyed Mutex]
     ├── EDP-System
     ├── EDP-Platform
@@ -61,7 +63,7 @@ This feature activates a **conditional direct EDP-Serial→EDP-Logging source de
 
 ## Optional bounded FIFO of complete EDLG frames (additional Serial tranche)
 
-`serial/BoundedEdlgFrameQueue.hpp` composes the **existing EDP-Logging EDLG writer**, the already-qualified EDP-Serial `EdlgFramePump` and an **EDP-Threading composition-selected ordinary Mutex** into a fixed-capacity, noncopyable FIFO of complete framed records. Multiple producer Tasks attempt admission through one native `TryAcquire`/NoWait; one application worker `PumpNext` sends the exact oldest frame byte suffix until completed before emitting bytes from a later frame. Native lock/provider failures are explicit, including truthful "queued but lock release failed" and "frame completed but lock release failed" flags; Mutex-release failure permanently poisons the queue and prevents unsafe reuse. Source is conditional, not imported by the default umbrella.
+`serial/BoundedEdlgFrameQueue.hpp` composes the **existing EDP-Logging EDLG writer**, the EDP-Serial `EdlgFramePump`, an **EDP-Threading composition-selected ordinary Mutex** for frame/output ownership, and a separately **application-selected EDP-Platform SpinLock** for independent very-short status snapshots and terminal poison publication into a fixed-capacity, noncopyable FIFO of complete framed records. Multiple producer Tasks attempt admission through one native `TryAcquire`/NoWait; one application worker `PumpNext` sends the exact oldest frame byte suffix until completed before emitting bytes from a later frame. Native lock/provider failures are explicit, including truthful "queued but lock release failed" and "frame completed but lock release failed" flags; Mutex-release failure permanently poisons the queue and prevents unsafe reuse. Source is conditional, not imported by the default umbrella.
 
 **Qualification boundary:** only participants of **one** queue are serialized; direct UART `printf`, a second queue, native CDC output or some other writer bypassing this queue could still interleave bytes. No automatic worker, task shutdown/seal, physical delivery/durability, concrete Arduino/ESP-IDF Serial backend, or hard real-time bounds are claimed. GCC/Clang native concurrency and CRC tests PASS RPI400 `20261016T085921-068e380e`; Xtensa C++20 syntax-only PASS `20261016T090015-492b0459`. See [bounded FIFO](docs/BOUNDED-EDLG-FRAME-QUEUE.MD), [Wiki](wiki/Reference-serial-BoundedEdlgFrameQueue.md), [Dependency Graph](DEPENDENCY_GRAPH.MD). Run with `EDP_SERIAL_DEPENDENCY_ROOT` to the pinned EDP owner checkouts and `EDP_LOGGING_SOURCE_DIR` to actual Logging source: `CXX=g++ bash tests/run-bounded-edlg-queue-tests.sh`, repeat with Clang.
 

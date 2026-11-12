@@ -2,7 +2,7 @@
 
 This C++20 example isolates one of the source-supported Serial contracts. **Every target is a buildable demonstration of a *memory-only app-composed provider*, NOT a real UART or USB delivery demonstration.** It creates no serial port, native driver, task, interrupt, allocation or persistence store. Each variant computes `Demo::Run()` once and stores its zero-on-success error code in debugger-visible `EdpSerialBoundedEdlgFrameQueueDemoResult`.
 
-The example composes opt-in EDP-Logging EDLG framing and EDP-Threading's keyed ordinary Mutex capability with a statically bounded two-record FIFO. It demonstrates Full backpressure, one WouldBlock and an ordered CRC-clean pair of complete output frames. **The local example Mutex is intentionally a single-context simulation, never a real concurrent Platform/Threading native synchronization provider.** For multi-producer applications Bootstrap must inject a qualified actual Mutex and reserve exclusive access to the underlying entire endpoint across pump calls.
+The example composes opt-in EDP-Logging EDLG framing and EDP-Threading's keyed ordinary Mutex capability with a statically bounded two-record FIFO and a separate EDP-Platform SpinLock for short queue depth/poison publication. It demonstrates Full backpressure, one WouldBlock and an ordered CRC-clean pair of complete output frames. **The local example Mutex AND StateSpinLock are intentionally single-context simulations, never real concurrent Platform/Threading native synchronization providers.** For multi-producer applications Bootstrap must inject a qualified actual Threading Mutex and EDP-Platform SpinLock and reserve exclusive access to the underlying entire endpoint across pump calls.
 
 ## Build targets
 

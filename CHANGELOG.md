@@ -14,7 +14,7 @@ All current repository versions remain **0.1.0**. These are untagged development
 
 ### Portability fixes
 
-- Replaced the private FIFO poison latch's `std::atomic<bool>` with the already qualified always-lock-free `std::atomic<std::size_t>` 0/1 representation. This addresses the ESP32-WROOM Arduino core's actual `atomic<bool>::is_always_lock_free == false` compile failure without changing the public API, failure semantics, memory model or 0.1.0 version.
+- Both the original `std::atomic<bool>` poison flag and its first replacement `std::atomic<size_t>` failed **real ESP32-WROOM PIOArduino compile-time always-lock-free checks** (the exact negative runs remain in the handoff). Replaced the depth/poison publication with a **separate application-owned EDP-Platform short SpinLock provider** selected as the FIFO's fourth template/second constructor argument, while the existing EDP-Threading ordinary Mutex retains exclusive frame and native endpoint ownership. The SPI-like lock guards only bounded state, never UART I/O. This is a deliberate V2 source-breaking caller migration, no compatibility aliases, versions unchanged at 0.1.0.
 
 ### Deliberate limits
 
