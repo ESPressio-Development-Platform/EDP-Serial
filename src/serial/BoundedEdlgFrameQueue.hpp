@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <utility>
 
+#include <ESPressio_Platform.hpp>
 #include <ESPressio_Threading.hpp>
 
 #include "EdlgFramePump.hpp"
