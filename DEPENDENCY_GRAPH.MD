@@ -37,10 +37,10 @@ EDP-Serial (optional FIFO profile)
 
 The opt-in application manifest must name all **actually activated direct edges**; the default `library.json` remains System-only. No circular dependencies or platform-specific concrete import were added by the FIFO. The previous native atomic<bool> and atomic<size_t> compile-time lock-free assumptions were **both false** under PIOArduino ESP32-WROOM; the caller must inject the existing qualified EDP-Platform SpinLock as the *fourth template argument* instead. The application must declare this direct EDP-Platform edge rather than rely on Threading's transitive import.
 
-## Future conditional graphs — NOT activated by current code
+## Concrete consumers and other possible conditional graphs
 
 - `EDP-Serial-Arduino -> EDP-Serial` with platform-specific concrete UART/USB provider and its own necessary platform abstraction/SDK edges
-- `EDP-Serial-ESP-IDF -> EDP-Serial` with platform-specific concrete UART/USB provider
+- **CURRENT downstream implementation, not future:** `EDP-Serial-ESP-IDF -> EDP-Serial` with an explicit ESP-IDF UART TX FIFO native concrete. This abstract Serial package does not depend on it and does not automatically configure a UART.
 - **NOW ACTIVATED CONDITIONALLY**: `EDP-Serial -> EDP-Logging` only for applications importing `<serial/EdlgFramePump.hpp>`. This optional, direct dependency is on the EDP-Logging **abstract EDLG framing source**; its default umbrella and default `library.json` include remain unmodified. No Logging->Serial reverse edge or platform concrete link. Application build configuration MUST explicitly declare both EDP-Serial and EDP-Logging; it MUST NOT infer the optional edge from transitive includes. The rest of the optional activation's EDP tree matches EDP-Logging's **dependency-free default framing** (C++20 standard library only). The frame pump uses native EDP-Serial's EDP-System Composition-qualified ByteWriteEndpoint. No new EDP-Clock/Memory/Threading edge is activated by this header.
 
 Every eventual application Bootstrap must explicitly compose exact provider capability, source ownership, endpoint concurrency, partial-output framing and lifetime. Actual activated optional edges must be re-audited for cycles, transitive dependency trees and build validity.
