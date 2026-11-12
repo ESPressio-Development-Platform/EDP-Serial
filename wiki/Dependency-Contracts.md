@@ -1,6 +1,6 @@
 # Dependency contracts
 
-**Default direct mandatory EDP dependency:** EDP-System at the current selected `main`, providing `Framework::Domain`, `Provider`, `Offers`, `ExclusiveCapability` and `Requirement<...,ExactlyProviders<1>>`. This owner is not duplicated in Serial.
+**Default direct mandatory EDP dependency:** EDP-System from `main`, as declared in `library.json`, providing `Framework::Domain`, `Provider`, `Offers`, `ExclusiveCapability` and `Requirement<...,ExactlyProviders<1>>`. This owner is not duplicated in Serial.
 
 **Opt-in EdlgFramePump:** imports `logging/EdlgFrame.hpp` from EDP-Logging, which owns the 20-byte overhead, CRC, exact framed payload byte format and codec enum. **No Logging→Serial** reciprocal dependency; default `ESPressio_Serial.hpp` has no Logging import.
 

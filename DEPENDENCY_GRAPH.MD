@@ -1,6 +1,6 @@
 # EDP-Serial Dependency Graph
 
-**Active branch:** `feature/logging-v1`; package version **0.1.0**.
+Package version **0.1.0**. The default package resolves EDP-System from its `main` branch.
 
 ## Current full mandatory dependency tree
 
@@ -11,7 +11,7 @@ EDP-Serial
 
 The **only direct EDP dependency** is EDP-System's static Composition Framework. `Serial::Domain` and the exclusive `Serial::ByteStreamWriter` capability define a same-domain, exactly-one-provider requirement. The C++20 `ByteWriteEndpoint` concept checks that a Bootstrap-chosen endpoint advertises `CompositionOffers::Contains<ByteStreamWriter>` and has a conformant `noexcept TryWrite` operation. EDP-System has no further EDP dependency; the current dependency graph is acyclic.
 
-No EDP-Logging, EDP-Memory, EDP-Threading, platform SDK, Arduino/ESP-IDF concrete or deprecated `ESPressio-*` repository is consumed by this domain. Host tests use a fake provider deriving from `EDP-System::CompositionFramework::Provider`, with exact source/include root controlled by `EDP_SYSTEM_SOURCE_DIR`.
+The default umbrella imports only the platform-neutral endpoint contracts. Optional headers select their additional owners explicitly. Host tests use a fake provider deriving from `EDP-System::CompositionFramework::Provider`, with exact source/include root controlled by `EDP_SYSTEM_SOURCE_DIR`.
 
 ## Optional EDLG FIFO (activated only by explicit header import)
 

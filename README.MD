@@ -6,6 +6,8 @@ Platform-neutral, bounded, non-blocking serial byte endpoint contracts for the E
 
 ## Dependencies
 
+The default PlatformIO package resolves its EDP-System dependency from `main`.
+
 The default `ESPressio_Serial.hpp` imports **only EDP-System** through its static Composition Framework. The opt-in frame pump and queue introduce additional direct dependencies **only when their corresponding headers are explicitly imported**, and application manifests must declare these rather than relying on transitive discovery.
 
 ```text

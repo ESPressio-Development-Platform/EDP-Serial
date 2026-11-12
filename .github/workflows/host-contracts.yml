@@ -11,8 +11,17 @@ jobs:
       matrix:
         cxx: [g++, clang++]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout EDP-Serial
+        uses: actions/checkout@v4
+        with:
+          path: EDP-Serial
+      - name: Checkout EDP-System
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-System
+          ref: main
+          path: EDP-System
       - name: Compile and run endpoint contracts
         env:
           CXX: ${{ matrix.cxx }}
-        run: bash tests/run_host_tests.sh
+        run: bash EDP-Serial/tests/run_host_tests.sh

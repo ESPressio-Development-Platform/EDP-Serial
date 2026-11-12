@@ -448,3 +448,20 @@ sdkconfig.*.old
 *.hex
 *.uf2
 *.bin
+
+# Local filesystem metadata and generated ESP-IDF demo configuration
+.LSOverride
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+.TemporaryItems/
+__MACOSX/
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+*.lnk
+sdkconfig
+sdkconfig.esp32dev
+platformio_override.ini

@@ -14,7 +14,12 @@ All current repository versions remain **0.1.0**. These are untagged development
 
 ### Portability fixes
 
-- Both the original `std::atomic<bool>` poison flag and its first replacement `std::atomic<size_t>` failed **real ESP32-WROOM PIOArduino compile-time always-lock-free checks** (the exact negative runs remain in the handoff). Replaced the depth/poison publication with a **separate application-owned EDP-Platform short SpinLock provider** selected as the FIFO's fourth template/second constructor argument, while the existing EDP-Threading ordinary Mutex retains exclusive frame and native endpoint ownership. The SPI-like lock guards only bounded state, never UART I/O. This is a deliberate V2 source-breaking caller migration, no compatibility aliases, versions unchanged at 0.1.0.
+- Both the original `std::atomic<bool>` poison flag and its first replacement `std::atomic<size_t>` failed **real ESP32-WROOM PIOArduino compile-time always-lock-free checks** (the exact negative runs remain in the handoff). Replaced the depth/poison publication with a **separate application-owned EDP-Platform short SpinLock provider** selected as the FIFO's fourth template/second constructor argument, while the existing EDP-Threading ordinary Mutex retains exclusive frame and native endpoint ownership. The short Platform SpinLock guards depth and poison publication. UART I/O stays under the ordinary Mutex. This is a deliberate V2 source-breaking caller migration, no compatibility aliases, versions unchanged at 0.1.0.
+
+### Release integration
+
+- The default PlatformIO manifest resolves EDP-System from `main`. The existing GCC and Clang host workflow checks out the public EDP-System dependency alongside EDP-Serial.
+- The three FIFO demo layouts use a noncopyable, nonmovable single-context SpinLock provider. RPI400 run `20261112T114409-376d71e0` passed both FIFO host compilers and both PIOArduino targets with the published provider declarations.
 
 ### Deliberate limits
 
