@@ -68,7 +68,6 @@ namespace ESPressio::Serial {
     class BoundedEdlgFrameQueue final {
         static_assert(TFrameCapacity > 0U);
         static_assert(std::atomic<std::size_t>::is_always_lock_free);
-        static_assert(std::atomic<bool>::is_always_lock_free);
         static_assert(
             std::is_same_v<
                 decltype(std::declval<TMutexProvider&>().TryAcquire()),
@@ -97,13 +96,13 @@ namespace ESPressio::Serial {
         std::size_t _head{0U};
         std::size_t _tail{0U};
         std::atomic<std::size_t> _depth{0U};
-        std::atomic<bool> _poisoned{false};
+        std::atomic<std::size_t> _poisoned{0U};
 
         [[nodiscard]] bool ReleaseOrPoison() noexcept {
             if (_mutex->Release() == ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
                 return true;
             }
-            _poisoned.store(true,std::memory_order_release);
+            _poisoned.store(1U,std::memory_order_release);
             return false;
         }
 
@@ -125,7 +124,7 @@ namespace ESPressio::Serial {
         }
 
         [[nodiscard]] bool Poisoned() const noexcept {
-            return _poisoned.load(std::memory_order_acquire);
+            return _poisoned.load(std::memory_order_acquire) != 0U;
         }
 
         /// Nonblocking producer offer: one TryAcquire (NoWait) only. A
@@ -172,7 +171,7 @@ namespace ESPressio::Serial {
                     default:
                         // Busy while a free FIFO slot exists is internal
                         // corruption. Poison rather than misreport capacity.
-                        _poisoned.store(true,std::memory_order_release);
+                        _poisoned.store(1U,std::memory_order_release);
                         status = EdlgQueueOfferStatus::Poisoned;
                         break;
                 }
