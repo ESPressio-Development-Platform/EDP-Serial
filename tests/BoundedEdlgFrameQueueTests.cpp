@@ -14,6 +14,7 @@ namespace Test {
     namespace Serial = ESPressio::Serial;
     namespace Threading = ESPressio::Threading;
     namespace Logging = ESPressio::Logging;
+    namespace Platform = ESPressio::Platform;
 
     struct QueueIdentity final {};
 
@@ -42,6 +43,40 @@ namespace Test {
             return fail
                 ? Threading::OrdinaryMutexReleaseResult::ProviderFailure
                 : Threading::OrdinaryMutexReleaseResult::Released;
+        }
+    };
+
+    /// Real cross-thread host synchronization for independently published
+    /// queue depth and poison, exercising EDP-Platform's existing SpinLock.
+    struct StateSpinLock final : Platform::Framework::Provider<
+        Platform::Domain,
+        Platform::Framework::Offers<
+            Platform::Framework::Offer<
+                Platform::Synchronization::SpinLock,
+                Platform::Framework::PropertyValue<
+                    Platform::Synchronization::SpinLockSupportsInterruptContext,
+                    false
+                >
+            >
+        >
+    > {
+        std::mutex Native;
+
+        void Acquire() noexcept { Native.lock(); }
+
+        [[nodiscard]] Platform::Synchronization::SpinLockReleaseResult Release() noexcept {
+            Native.unlock();
+            return Platform::Synchronization::SpinLockReleaseResult::Released;
+        }
+
+        [[nodiscard]] Platform::Synchronization::SpinLockAcquireResult
+        AcquireFromInterrupt() noexcept {
+            return Platform::Synchronization::SpinLockAcquireResult::UnsupportedInterruptContext;
+        }
+
+        [[nodiscard]] Platform::Synchronization::SpinLockReleaseResult
+        ReleaseFromInterrupt() noexcept {
+            return Platform::Synchronization::SpinLockReleaseResult::UnsupportedInterruptContext;
         }
     };
 
@@ -110,7 +145,8 @@ namespace Test {
 
     void TestPartialHeadNeverInterleavesLaterFrames() {
         MutexProvider mutex;
-        Serial::BoundedEdlgFrameQueue<3U,1U,MutexProvider> queue(mutex);
+        StateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<3U,1U,MutexProvider,StateSpinLock> queue(mutex,stateSpin);
         Endpoint endpoint;
         for(std::uint8_t i=0U;i<3U;++i) {
             const std::array<std::byte,1U> payload{std::byte{i}};
@@ -152,7 +188,8 @@ namespace Test {
 
     void TestConcurrentProducersOneFIFO() {
         MutexProvider mutex;
-        Serial::BoundedEdlgFrameQueue<8U,1U,MutexProvider> queue(mutex);
+        StateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<8U,1U,MutexProvider,StateSpinLock> queue(mutex,stateSpin);
         Endpoint endpoint;
         std::atomic<unsigned> failures{0U};
         std::array<std::thread,8U> producers;
@@ -192,7 +229,8 @@ namespace Test {
 
     void TestNonblockingContentionAndInvalidOffers() {
         MutexProvider mutex;
-        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider> queue(mutex);
+        StateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider,StateSpinLock> queue(mutex,stateSpin);
         Endpoint endpoint;
         const std::array<std::byte,1U> payload{std::byte{2U}};
         mutex.Mutex.lock();
@@ -214,7 +252,8 @@ namespace Test {
 
     void TestReleaseFailureAfterFrameAcceptedIsReported() {
         MutexProvider mutex;
-        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider> queue(mutex);
+        StateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider,StateSpinLock> queue(mutex,stateSpin);
         Endpoint endpoint;
         const std::array<std::byte,1U> payload{std::byte{3U}};
         assert(queue.TryEnqueue(Logging::EdlgCodec::Cbor,payload).Status==
@@ -235,7 +274,8 @@ namespace Test {
 
     void TestLockFailurePoisonCannotLoseQueuedFrame() {
         MutexProvider mutex;
-        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider> queue(mutex);
+        StateSpinLock stateSpin;
+        Serial::BoundedEdlgFrameQueue<2U,1U,MutexProvider,StateSpinLock> queue(mutex,stateSpin);
         Endpoint endpoint;
         const std::array<std::byte,1U> payload{std::byte{3U}};
         mutex.FailAcquire.store(true);
