@@ -4,6 +4,39 @@ Platform-neutral, bounded, non-blocking serial byte endpoint contracts for the E
 
 **Status:** source-complete platform-neutral Serial abstraction plus optional EDLG frame-pump and bounded FIFO, under `feature/logging-v1`, version **0.1.0**. A separate ESP-IDF native UART concrete exists in **EDP-Serial-ESP-IDF**; this abstract library itself does not configure UART/USB, own a console, start a worker or guarantee wire delivery. Target demonstration builds are being independently qualified before any `main` promotion.
 
+## Dependencies
+
+The default `ESPressio_Serial.hpp` imports **only EDP-System** through its static Composition Framework. The opt-in frame pump and queue introduce additional direct dependencies **only when their corresponding headers are explicitly imported**, and application manifests must declare these rather than relying on transitive discovery.
+
+```text
+EDP-Serial [default abstract ByteEndpoint]
+└── EDP-System [mandatory Composition; no further EDP dependencies]
+
+EDP-Serial [only when <serial/EdlgFramePump.hpp> is imported]
+├── EDP-System [mandatory default]
+└── EDP-Logging [conditional canonical EDLG; core umbrella has no EDP dependency]
+
+EDP-Serial [only when <serial/BoundedEdlgFrameQueue.hpp> is imported]
+├── EDP-System [mandatory default]
+├── EDP-Logging [conditional canonical EDLG; no reverse edge]
+└── EDP-Threading [conditional ordinary keyed Mutex]
+    ├── EDP-System
+    ├── EDP-Platform
+    │   └── EDP-System
+    ├── EDP-Clock
+    │   ├── EDP-System
+    │   └── EDP-Platform
+    │       └── EDP-System
+    ├── EDP-BoundedTopology
+    └── EDP-Memory
+        ├── EDP-System
+        ├── EDP-Platform
+        │   └── EDP-System
+        └── EDP-BoundedTopology
+```
+
+All owner versions remain **0.1.0**. EDP-Serial-ESP-IDF is an optional **downstream concrete**, not a dependency of the abstract Serial owner. See the complete [Dependency Graph](./DEPENDENCY_GRAPH.MD) for module-level activation and [Wiki Dependency Contracts](./wiki/Dependency-Contracts.md) for provider invariants.
+
 ## Public API
 
 `#include <ESPressio_Serial.hpp>` imports `<serial/ByteEndpoint.hpp>`. The `ESPressio::Serial` domain exposes a unique EDP-System Composition-selected provider (the *only* direct EDP library dependency):
