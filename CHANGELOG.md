@@ -34,3 +34,9 @@ All current repository versions remain **0.1.0**. These are untagged development
 - No physical UART capture, arbitrary hardware performance, Flash endurance, generic PowerLoss atomicity or secure transport guarantee is given. All versions remain 0.1.0.
 
 See [README](README.MD), [demos](demos/README.MD), [Architecture](docs/ARCHITECTURE.MD) and [G1 downstream Logging evidence](https://github.com/ESPressio-Development-Platform/Policy/blob/main/Handoff/2026-11-09/2026-11-09-09-29-EDP-Logging-Dependency-First-Reintegration.MD). Reconcile all entries before any tag.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

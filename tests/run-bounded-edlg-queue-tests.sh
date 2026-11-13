@@ -5,7 +5,7 @@ WORKSPACE="${EDP_SERIAL_DEPENDENCY_ROOT:-$(cd "$ROOT/.." && pwd)}"
 LOGGING="${EDP_LOGGING_SOURCE_DIR:-$WORKSPACE/EDP-Logging}"
 OUTPUT="$(mktemp)"
 trap 'rm -f "$OUTPUT"' EXIT
-for repo in EDP-System EDP-Platform EDP-Clock EDP-Threading EDP-BoundedTopology EDP-Memory; do
+for repo in EDP-System EDP-Platform EDP-Clock EDP-Threading EDP-BoundedTopology EDP-Memory EDP-Platform-Portable; do
     test -d "$WORKSPACE/$repo/src" || { echo "Missing $repo" >&2; exit 2; }
 done
 test -d "$LOGGING/src" || { echo "Missing EDP-Logging" >&2; exit 2; }
@@ -17,7 +17,7 @@ test -d "$LOGGING/src" || { echo "Missing EDP-Logging" >&2; exit 2; }
     -I"$WORKSPACE/EDP-Clock/src" \
     -I"$WORKSPACE/EDP-Threading/src" \
     -I"$WORKSPACE/EDP-BoundedTopology/src" \
-    -I"$WORKSPACE/EDP-Memory/src" \
+    -I"$WORKSPACE/EDP-Memory/src" -I"$WORKSPACE/EDP-Platform-Portable/src" \
     "$ROOT/tests/BoundedEdlgFrameQueueTests.cpp" -o "$OUTPUT"
 "$OUTPUT"
 echo "EDP-Serial opt-in composed FIFO EDLG queue: PASS"

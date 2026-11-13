@@ -21,3 +21,9 @@
 **PRIVATE `_buffer`** owns every complete EDLG frame byte across output retries; **`_size`** records exact valid whole-frame length; **`_accepted`** is the monotonic number of bytes a native provider already consumed; **`_pending`** identifies an exclusively live frame. The frame's source payload becomes independent of its caller immediately after `Begin` succeeds. The methods `IsPending()`, `AcceptedFrameBytes()` and `TotalFrameBytes()` report the live state without allocation and return zero counters when no frame is pending.
 
 **PUBLIC `Begin(codec, encodedPayload)`** fails Busy before touching `_buffer`, and uses the canonical EDP-Logging frame encoder only on a new admitted payload. Exact typed statuses are Queued (0), Busy (1), InvalidCodec (2), InvalidPayload (3); an invalid attempt cannot overwrite a previously pending frame. **PUBLIC `Pump<TEndpoint>(endpoint)`** offers only the suffix `_buffer[_accepted.._size)`, adds the exact accepted prefix from EDP-Serial `TryWriteComplete` and clears `_pending`, `_accepted`, `_size` only after Complete. `EdlgPumpStatus` values NoFrame (0), Complete (1), WouldBlock (2), ProviderFailure (3), ProviderContractViolation (4) are distinct. `EdlgPumpResult` fields Status, AcceptedFrameBytes and TotalFrameBytes describe native acceptance, not wire receipt or filesystem durability; `IsComplete()` checks only Complete. The physical endpoint must remain reserved by the same application across *all* partial Pump attempts; another writer could otherwise interleave.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

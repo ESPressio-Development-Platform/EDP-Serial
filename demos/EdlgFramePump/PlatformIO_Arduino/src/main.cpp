@@ -1,3 +1,5 @@
+#include <ESPressio_Platform_Portable_ByteOperations.hpp>
+
 #include <Arduino.h>
 
 #include <array>
@@ -49,7 +51,7 @@ namespace Demo {
         const std::array<std::byte, 2U> illustrativeJson{
             std::byte{'{'}, std::byte{'}'}
         };
-        if (pump.Begin(Logging::EdlgCodec::Json, illustrativeJson) !=
+        if (pump.Begin(Logging::EdlgCodec::Json, illustrativeJson, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) !=
             Serial::EdlgPumpBeginStatus::Queued) {
             return 1;
         }

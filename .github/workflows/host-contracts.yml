@@ -25,3 +25,68 @@ jobs:
         env:
           CXX: ${{ matrix.cxx }}
         run: bash EDP-Serial/tests/run_host_tests.sh
+
+
+  logging-integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cxx: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: EDP-Serial
+      - name: Checkout EDP-Logging
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Logging
+          ref: main
+          path: EDP-Logging
+      - name: Checkout EDP-Memory
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Memory
+          ref: main
+          path: EDP-Memory
+      - name: Checkout EDP-Platform-Portable
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Platform-Portable
+          ref: main
+          path: EDP-Platform-Portable
+      - name: Checkout EDP-Platform
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Platform
+          ref: main
+          path: EDP-Platform
+      - name: Checkout EDP-BoundedTopology
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-BoundedTopology
+          ref: main
+          path: EDP-BoundedTopology
+      - name: Checkout EDP-System
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-System
+          ref: main
+          path: EDP-System
+      - name: Checkout EDP-Clock
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Clock
+          ref: main
+          path: EDP-Clock
+      - name: Checkout EDP-Threading
+        uses: actions/checkout@v4
+        with:
+          repository: ESPressio-Development-Platform/EDP-Threading
+          ref: main
+          path: EDP-Threading
+      - name: Run the Logging frame pump and bounded FIFO
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: |
+          bash EDP-Serial/tests/run_logging_frame_host_tests.sh
+          bash EDP-Serial/tests/run-bounded-edlg-queue-tests.sh

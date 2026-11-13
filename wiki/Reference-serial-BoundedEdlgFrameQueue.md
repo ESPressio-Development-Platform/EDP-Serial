@@ -22,3 +22,9 @@
 **PUBLIC `TryEnqueue(codec,payload)`** acquires one NoWait Mutex, rechecks poison, refuses Full or invalid canonical frame, and advances tail/depth only on complete Begin. On a failed unlock *after* enqueue it returns `QueuedButLockReleaseFailed` with FrameWasQueued=true; no rollback or queue-reset lie is permitted. **PUBLIC `PumpNext<TEndpoint>(endpoint)`** borrows an existing EDP-System ByteWriteEndpoint, takes that same ordinary Mutex, pumps only the current oldest accepted-byte suffix, advances head/depth only after Complete, and reports a truthful `FrameCompleted` even when the following Mutex Release failed. The status enums distinguish native Full/Busy/ProviderFailure/LockReleaseFailed/Poisoned; queue depth is never a remote durability ACK.
 
 **PUBLIC `Depth()`** returns a snapshot under the app's actual Platform SpinLock; **`IsPoisoned()`** independently observes the sticky poison latch under that same SpinLock, including after a failed native ordinary Mutex Release. SpinLock `Release` failure terminates rather than making a fake safe observation. Neither accessor locks nor proves the physical endpoint idle. Constructor borrows the real Mutex; copy/move are deleted because live frame and provider ownership must stay stable. Production endpoints require genuine Threading Mutex and exclusive physical native writer arbitration. The memory-only example fake Mutex proves single-context code shape, **not cross-task safety or UART delivery**.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

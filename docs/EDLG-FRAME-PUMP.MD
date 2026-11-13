@@ -19,3 +19,9 @@
 `tests/EdlgFramePumpTests.cpp` imports the **actual EDP-Logging EDLG writer** and EDP-System Composition-qualified fake Serial ByteStreamWriter. Tests verify copied source lifetime, exact 23-byte canonical `abc` EDLG golden fixture (matching Logging C++/Python vector), partial 7-byte + WouldBlock + 16-byte resume, rejection of a second frame while pending, provider failure after partial accepted prefix, malformed provider no-progress failure and later successful continuation, invalid codec, oversized payload and null nonempty input. Test runner `tests/run_logging_frame_host_tests.sh` needs the EDP-System and EDP-Logging **direct** source roots supplied via `EDP_SYSTEM_SOURCE_DIR`/`EDP_LOGGING_SOURCE_DIR`; default core `tests/run_host_tests.sh` never pulls Logging into the base library.
 
 GCC/Clang optional frame pump **and core EDP-Serial** host suites PASS, RPI400 detached `20261016T083148-54fa5f8c`. Xtensa ESP32 C++20 compile-only syntax of the same actual optional test PASS `20261016T083207-c1219033`. No linked Arduino/ESP-IDF app, RPI USB/UART output, physical peripheral/ToF/radio or complete-frame concurrent writer/HIL evidence. EDP-Serial-Arduino and EDP-Serial-ESP-IDF remain empty stubs.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

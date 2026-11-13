@@ -80,3 +80,9 @@ C++20 strict host suite: `CXX=g++ bash tests/run_host_tests.sh`, repeat with `CX
 The [three V2 demo families](demos/README.MD) demonstrate the exact bounded byte endpoint, EDLG frame pump and ordinary-keyed FIFO contracts, each with Arduino IDE, PlatformIO Arduino-ESP32 and PlatformIO ESP-IDF source entry points. They use **memory-only fake endpoint providers**: this is intentionally not a real UART peripheral/USB output demonstration. Native provider selection belongs to the application and concrete repository. `EDP-Serial-Arduino` is currently a placeholder; do not infer an Arduino Serial concrete from these examples. The ESP-IDF UART concrete is separately implemented under `EDP-Serial-ESP-IDF`.
 
 The [changelog](CHANGELOG.md), [full dependency graph](DEPENDENCY_GRAPH.MD), [normative architecture](docs/ARCHITECTURE.MD), [Wiki API](wiki/Public-API.md) and [build evidence](wiki/Build-Test-and-Source.md) describe the 0.1.0 contract. No release tag is created by these documentation updates. A passing source build establishes syntax/link compatibility on that selected target, not native FIFO drain, connected peer receipt, duration bounds, security or physical PowerLoss durability.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

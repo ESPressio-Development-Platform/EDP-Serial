@@ -11,3 +11,9 @@ The example composes opt-in EDP-Logging EDLG framing and EDP-Threading's keyed o
 - `PlatformIO_ESP-IDF`: `pio run -d demos/BoundedEdlgFrameQueue/PlatformIO_ESP-IDF` with same sibling dependencies and ESP-IDF toolchain.
 
 All source layouts are explicit and package versions stay `0.1.0`. A successful compile is not proof of physical UART output. These examples are single-context and fail closed with a nonzero result rather than silently declaring a failed transfer successful. The named GCC/Clang host tests and genuine native provider qualification are documented separately; this example does not replace them.
+
+The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
+application-selected EDP-Memory ByteOperations provider during framing.
+The optional FIFO uses a compile-time byte-copy provider and defaults to
+the existing EDP-Platform-Portable provider. Install those owners and
+their declared dependencies for the opt-in pump and queue demos.

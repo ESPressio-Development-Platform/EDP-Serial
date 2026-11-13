@@ -7,7 +7,7 @@
 #include <span>
 
 #include <ESPressio_Serial.hpp>
-#include <logging/EdlgFrame.hpp>
+#include <logging/EdlgFrameWriter.hpp>
 
 namespace ESPressio::Serial {
 
@@ -86,14 +86,22 @@ namespace ESPressio::Serial {
 
         /// Copies/frames the payload into exclusive fixed storage on success.
         /// Busy/invalid attempts never alter the already-pending frame.
+        /// @tparam TByteOperationsProvider Bootstrap-selected Memory copy provider.
+        template<class TByteOperationsProvider>
         [[nodiscard]] EdlgPumpBeginStatus Begin(
             ESPressio::Logging::EdlgCodec codec,
-            std::span<const std::byte> encodedPayload
+            std::span<const std::byte> encodedPayload,
+            const TByteOperationsProvider& byteOperations
         ) noexcept {
             if (_pending) return EdlgPumpBeginStatus::Busy;
             std::size_t written{0U};
             const auto result = ESPressio::Logging::WriteEdlgFrame(
-                codec, encodedPayload, _buffer, written, TMaximumPayloadBytes
+                codec,
+                encodedPayload,
+                _buffer,
+                written,
+                TMaximumPayloadBytes,
+                byteOperations
             );
             switch (result) {
                 case ESPressio::Logging::EdlgFrameWriteResult::Succeeded:

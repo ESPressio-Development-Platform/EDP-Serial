@@ -10,6 +10,8 @@
 #include <ESPressio_Platform.hpp>
 #include <ESPressio_Threading.hpp>
 
+#include <ESPressio_Platform_Portable_ByteOperations.hpp>
+
 #include "EdlgFramePump.hpp"
 
 namespace ESPressio::Serial {
@@ -61,14 +63,17 @@ namespace ESPressio::Serial {
     /// across its PumpNext invocations, including WouldBlock between calls.
     /// A direct write or a second independent queue sharing that endpoint
     /// can still interleave bytes; Bootstrap must prohibit that.
+    /// @tparam TByteOperationsProvider Stateless Memory copy owner selected by Bootstrap.
     template<
         std::size_t TFrameCapacity,
         std::size_t TMaximumPayloadBytes,
         class TMutexProvider,
-        class TStateSpinLockProvider
+        class TStateSpinLockProvider,
+        class TByteOperationsProvider = ESPressio::Platform::Portable::Memory::ByteOperationsProvider
     >
     class BoundedEdlgFrameQueue final {
         static_assert(TFrameCapacity > 0U);
+        static_assert(std::is_nothrow_default_constructible_v<TByteOperationsProvider>);
         /// The application-selected Platform SpinLock guards the two short
         /// public state snapshots and sticky failure publication. A native
         /// Mutex cannot serve this role after its own Release has failed.
@@ -205,7 +210,11 @@ namespace ESPressio::Serial {
             bool queued = false;
 
             if (Depth() < TFrameCapacity) {
-                switch (_frames[_tail].Begin(codec,payload)) {
+                switch (_frames[_tail].Begin(
+                    codec,
+                    payload,
+                    TByteOperationsProvider{}
+                )) {
                     case EdlgPumpBeginStatus::Queued:
                         _tail = Next(_tail);
                         IncrementDepth();

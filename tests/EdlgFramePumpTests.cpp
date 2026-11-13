@@ -1,3 +1,5 @@
+#include <ESPressio_Platform_Portable_ByteOperations.hpp>
+
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -47,7 +49,7 @@ namespace Test {
         std::array<std::byte,3U> payload{
             std::byte{'a'},std::byte{'b'},std::byte{'c'}
         };
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,payload) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,payload, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::Queued);
         assert(pump.IsPending() && pump.TotalFrameBytes() == 23U);
         // Must be a copy: mutation after Begin never changes the wire frame.
@@ -62,7 +64,7 @@ namespace Test {
         assert(pump.AcceptedFrameBytes() == 7U);
 
         std::array<std::byte,1U> next{std::byte{0x55}};
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,next) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,next, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::Busy);
         assert(pump.AcceptedFrameBytes() == 7U);
 
@@ -82,7 +84,7 @@ namespace Test {
             assert(std::to_integer<std::uint8_t>(endpoint.Output[i]) == golden[i]);
         }
 
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,next) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,next, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::Queued);
     }
 
@@ -90,7 +92,7 @@ namespace Test {
         Serial::EdlgFramePump<16U> pump;
         Endpoint endpoint{};
         const std::array<std::byte,1U> payload{std::byte{0xA0U}};
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,payload) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,payload, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::Queued);
         endpoint.Script[0]={Serial::ByteWriteStatus::ProviderFailure,5U};
         const auto failed=pump.Pump(endpoint);
@@ -114,17 +116,17 @@ namespace Test {
     void TestInvalidInputsCannotQueue() {
         Serial::EdlgFramePump<1U> pump;
         const std::array<std::byte,2U> tooLong{std::byte{1},std::byte{2}};
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,tooLong) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,tooLong, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::InvalidPayload);
         assert(!pump.IsPending());
         const std::array<std::byte,1U> payload{std::byte{1}};
-        assert(pump.Begin(static_cast<Logging::EdlgCodec>(99U),payload) ==
+        assert(pump.Begin(static_cast<Logging::EdlgCodec>(99U),payload, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::InvalidCodec);
         assert(!pump.IsPending());
         const std::span<const std::byte> absent(
             static_cast<const std::byte*>(nullptr),1U
         );
-        assert(pump.Begin(Logging::EdlgCodec::Cbor,absent) ==
+        assert(pump.Begin(Logging::EdlgCodec::Cbor,absent, ESPressio::Platform::Portable::Memory::ByteOperationsProvider{}) ==
             Serial::EdlgPumpBeginStatus::InvalidPayload);
         assert(!pump.IsPending());
     }
