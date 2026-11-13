@@ -16,6 +16,11 @@ All current repository versions remain **0.1.0**. These are untagged development
 
 - Both the original `std::atomic<bool>` poison flag and its first replacement `std::atomic<size_t>` failed **real ESP32-WROOM PIOArduino compile-time always-lock-free checks** (the exact negative runs remain in the handoff). Replaced the depth/poison publication with a **separate application-owned EDP-Platform short SpinLock provider** selected as the FIFO's fourth template/second constructor argument, while the existing EDP-Threading ordinary Mutex retains exclusive frame and native endpoint ownership. The short Platform SpinLock guards depth and poison publication. UART I/O stays under the ordinary Mutex. This is a deliberate V2 source-breaking caller migration, no compatibility aliases, versions unchanged at 0.1.0.
 
+### Source compatibility
+
+- Queue poison and pump pending predicates are now `BoundedEdlgFrameQueue::IsPoisoned()` and `EdlgFramePump::IsPending()`. `EdlgPumpResult` and `WriteAttemptResult` both expose `IsComplete()`. Callers must use the new names. The predicates keep their existing meaning.
+- The private FIFO mutex release helper returns the existing Threading release result. A release failure still latches poison and preserves the recorded queue and endpoint progress.
+
 ### Release integration
 
 - The default PlatformIO manifest resolves EDP-System from `main`. The existing GCC and Clang host workflow checks out the public EDP-System dependency alongside EDP-Serial.

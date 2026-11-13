@@ -49,7 +49,7 @@ namespace Test {
         };
         assert(pump.Begin(Logging::EdlgCodec::Cbor,payload) ==
             Serial::EdlgPumpBeginStatus::Queued);
-        assert(pump.Pending() && pump.TotalFrameBytes() == 23U);
+        assert(pump.IsPending() && pump.TotalFrameBytes() == 23U);
         // Must be a copy: mutation after Begin never changes the wire frame.
         payload[0]=std::byte{'x'};
 
@@ -68,9 +68,9 @@ namespace Test {
 
         endpoint.Script[2]={Serial::ByteWriteStatus::Accepted,16U};
         auto second=pump.Pump(endpoint);
-        assert(second.Completed());
+        assert(second.IsComplete());
         assert(second.AcceptedFrameBytes == 23U && second.TotalFrameBytes == 23U);
-        assert(!pump.Pending());
+        assert(!pump.IsPending());
         assert(endpoint.Accepted == 23U && endpoint.Calls == 3U);
 
         const std::array<std::uint8_t,23U> golden{
@@ -96,19 +96,19 @@ namespace Test {
         const auto failed=pump.Pump(endpoint);
         assert(failed.Status == Serial::EdlgPumpStatus::ProviderFailure);
         assert(failed.AcceptedFrameBytes==5U);
-        assert(pump.Pending());
+        assert(pump.IsPending());
 
         endpoint.Script[1]={Serial::ByteWriteStatus::Accepted,0U};
         const auto contract=pump.Pump(endpoint);
         assert(contract.Status == Serial::EdlgPumpStatus::ProviderContractViolation);
         assert(contract.AcceptedFrameBytes == 5U);
-        assert(pump.Pending());
+        assert(pump.IsPending());
 
         endpoint.Script[2]={Serial::ByteWriteStatus::Accepted,16U};
         const auto completed=pump.Pump(endpoint);
-        assert(completed.Completed() && completed.AcceptedFrameBytes == 21U);
+        assert(completed.IsComplete() && completed.AcceptedFrameBytes == 21U);
         assert(endpoint.Accepted == 21U);
-        assert(!pump.Pending());
+        assert(!pump.IsPending());
     }
 
     void TestInvalidInputsCannotQueue() {
@@ -116,17 +116,17 @@ namespace Test {
         const std::array<std::byte,2U> tooLong{std::byte{1},std::byte{2}};
         assert(pump.Begin(Logging::EdlgCodec::Cbor,tooLong) ==
             Serial::EdlgPumpBeginStatus::InvalidPayload);
-        assert(!pump.Pending());
+        assert(!pump.IsPending());
         const std::array<std::byte,1U> payload{std::byte{1}};
         assert(pump.Begin(static_cast<Logging::EdlgCodec>(99U),payload) ==
             Serial::EdlgPumpBeginStatus::InvalidCodec);
-        assert(!pump.Pending());
+        assert(!pump.IsPending());
         const std::span<const std::byte> absent(
             static_cast<const std::byte*>(nullptr),1U
         );
         assert(pump.Begin(Logging::EdlgCodec::Cbor,absent) ==
             Serial::EdlgPumpBeginStatus::InvalidPayload);
-        assert(!pump.Pending());
+        assert(!pump.IsPending());
     }
 }
 

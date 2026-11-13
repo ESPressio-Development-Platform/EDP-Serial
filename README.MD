@@ -50,7 +50,7 @@ All owner versions remain **0.1.0**. EDP-Serial-ESP-IDF is an optional **downstr
 - `Domain`, exclusive `ByteStreamWriter` capability and `ByteStreamWriterRequirement`: EDP-System Composition requires exactly one selected same-domain provider
 - `ByteWriteEndpoint<T>`: C++20 compile-time requirement that a selected EDP-System Composition provider advertise `ByteStreamWriter` and have `ByteWriteResult TryWrite(span<const byte>) noexcept`
 - `WriteAttemptStatus`: `Complete`, `WouldBlock`, `ProviderFailure`, `ProviderContractViolation`
-- `WriteAttemptResult`: exact validated accepted prefix and strong outcome; `Completed()` predicate
+- `WriteAttemptResult`: exact validated accepted prefix and strong outcome; `IsComplete()` predicate
 - `TryWriteComplete(endpoint, borrowedBytes)`: attempt to consume the range without sleeps, polling, unbounded retry or owned memory. Each Accepted step advances at least one byte. WouldBlock or provider failure returns immediately, preserving valid prefix progress. An invalid provider result (zero progress Accepted, oversized count, nonzero WouldBlock, unknown status) fails closed.
 
 **Truthful semantics:** `BytesAccepted` means the provider accepted bytes, **not** that another computer received them or that UART/DMA/CDC hardware flushed or persisted them. Failure may leave an already-sent prefix in flight; no rollback is claimed. The algorithm has at most `bytes.size()` provider calls on a non-empty input.

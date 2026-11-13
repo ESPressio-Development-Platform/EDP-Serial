@@ -264,7 +264,7 @@ namespace Test {
         assert(result.FrameCompleted);
         assert(result.AcceptedFrameBytes==21U);
         assert(result.QueueDepth==0U);
-        assert(queue.Poisoned());
+        assert(queue.IsPoisoned());
         assert(queue.PumpNext(endpoint).Status==Serial::EdlgQueuePumpStatus::Poisoned);
         AssertValidFrames(
             std::span<const std::byte>(endpoint.Output.data(),endpoint.Size),
@@ -287,7 +287,7 @@ namespace Test {
         const auto attempted=queue.TryEnqueue(Logging::EdlgCodec::Cbor,payload);
         assert(attempted.Status==Serial::EdlgQueueOfferStatus::QueuedButLockReleaseFailed);
         assert(attempted.FrameWasQueued && queue.Depth()==1U);
-        assert(queue.Poisoned());
+        assert(queue.IsPoisoned());
         assert(queue.PumpNext(endpoint).Status==Serial::EdlgQueuePumpStatus::Poisoned);
         assert(queue.TryEnqueue(Logging::EdlgCodec::Cbor,payload).Status==
             Serial::EdlgQueueOfferStatus::Poisoned);

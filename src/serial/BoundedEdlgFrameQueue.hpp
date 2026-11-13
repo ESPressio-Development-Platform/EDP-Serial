@@ -136,12 +136,15 @@ namespace ESPressio::Serial {
             ReleaseStateSpin();
         }
 
-        [[nodiscard]] bool ReleaseOrPoison() noexcept {
-            if (_mutex->Release() == ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
-                return true;
+        /// Return the native mutex release outcome and latch poison on failure.
+        [[nodiscard]] ESPressio::Threading::OrdinaryMutexReleaseResult
+        ReleaseOrPoison() noexcept {
+            const auto result = _mutex->Release();
+            if (result != ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
+                MarkPoisoned();
             }
-            MarkPoisoned();
-            return false;
+
+            return result;
         }
 
         [[nodiscard]] static constexpr std::size_t Next(std::size_t index) noexcept {
@@ -166,7 +169,8 @@ namespace ESPressio::Serial {
             return depth;
         }
 
-        [[nodiscard]] bool Poisoned() const noexcept {
+        /// Reports whether the queue has latched a terminal failure.
+        [[nodiscard]] bool IsPoisoned() const noexcept {
             _stateSpin->Acquire();
             const bool poisoned = _poisoned;
             ReleaseStateSpin();
@@ -180,7 +184,7 @@ namespace ESPressio::Serial {
             ESPressio::Logging::EdlgCodec codec,
             std::span<const std::byte> payload
         ) noexcept {
-            if (Poisoned()) {
+            if (IsPoisoned()) {
                 return {EdlgQueueOfferStatus::Poisoned,false,Depth()};
             }
             const auto lock = _mutex->TryAcquire();
@@ -192,7 +196,7 @@ namespace ESPressio::Serial {
             }
             // Recheck poison after lock: a previous owner may have poisoned
             // it between the first load and this native acquisition.
-            if (Poisoned()) {
+            if (IsPoisoned()) {
                 static_cast<void>(ReleaseOrPoison());
                 return {EdlgQueueOfferStatus::Poisoned,false,Depth()};
             }
@@ -224,7 +228,8 @@ namespace ESPressio::Serial {
             }
 
             const auto depth = Depth();
-            if (!ReleaseOrPoison()) {
+            if (ReleaseOrPoison() !=
+                ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
                 return {
                     queued
                         ? EdlgQueueOfferStatus::QueuedButLockReleaseFailed
@@ -241,7 +246,7 @@ namespace ESPressio::Serial {
         /// producer/worker calls cannot interleave any frame bytes.
         template<ByteWriteEndpoint TEndpoint>
         [[nodiscard]] EdlgQueuePumpResult PumpNext(TEndpoint& endpoint) noexcept {
-            if (Poisoned()) {
+            if (IsPoisoned()) {
                 return {EdlgQueuePumpStatus::Poisoned,false,0U,0U,Depth()};
             }
             const auto lock = _mutex->TryAcquire();
@@ -251,15 +256,16 @@ namespace ESPressio::Serial {
             if (lock != ESPressio::Threading::OrdinaryMutexAcquireResult::Acquired) {
                 return {EdlgQueuePumpStatus::MutexProviderFailure,false,0U,0U,Depth()};
             }
-            if (Poisoned()) {
+            if (IsPoisoned()) {
                 static_cast<void>(ReleaseOrPoison());
                 return {EdlgQueuePumpStatus::Poisoned,false,0U,0U,Depth()};
             }
             if (Depth() == 0U) {
-                const auto released = ReleaseOrPoison();
+                const auto release = ReleaseOrPoison();
                 return {
-                    released ? EdlgQueuePumpStatus::Empty
-                             : EdlgQueuePumpStatus::LockReleaseFailed,
+                    release == ESPressio::Threading::OrdinaryMutexReleaseResult::Released
+                        ? EdlgQueuePumpStatus::Empty
+                        : EdlgQueuePumpStatus::LockReleaseFailed,
                     false,0U,0U,0U
                 };
             }
@@ -287,7 +293,8 @@ namespace ESPressio::Serial {
                     break;
             }
             const auto depth = Depth();
-            if (!ReleaseOrPoison()) {
+            if (ReleaseOrPoison() !=
+                ESPressio::Threading::OrdinaryMutexReleaseResult::Released) {
                 resultStatus = EdlgQueuePumpStatus::LockReleaseFailed;
             }
             return {

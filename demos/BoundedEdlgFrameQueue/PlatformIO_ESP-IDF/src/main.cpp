@@ -151,7 +151,7 @@ namespace Demo {
                 return 4;
             }
         }
-        if (queue.Depth() != 0U || queue.Poisoned()) {
+        if (queue.Depth() != 0U || queue.IsPoisoned()) {
             return 5;
         }
         const std::span<const std::byte> stream(endpoint.Output.data(), endpoint.Used);

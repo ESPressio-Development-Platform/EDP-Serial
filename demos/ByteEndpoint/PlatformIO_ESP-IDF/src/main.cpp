@@ -42,7 +42,7 @@ namespace Demo {
             std::byte{1U}, std::byte{2U}, std::byte{3U}
         };
         const auto complete = Serial::TryWriteComplete(endpoint, offered);
-        if (!complete.Completed() || complete.BytesAccepted != offered.size()) {
+        if (!complete.IsComplete() || complete.BytesAccepted != offered.size()) {
             return 1;
         }
         if (endpoint.Used != offered.size()) {

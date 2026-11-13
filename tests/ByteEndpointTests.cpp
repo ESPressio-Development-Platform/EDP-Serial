@@ -38,7 +38,7 @@ namespace Test {
         const auto empty = Serial::TryWriteComplete(
             endpoint, std::span<const std::byte>{}
         );
-        assert(empty.Completed() && empty.BytesAccepted == 0U);
+        assert(empty.IsComplete() && empty.BytesAccepted == 0U);
         assert(endpoint.Calls == 0U);
 
         endpoint.Script[0] = {Serial::ByteWriteStatus::Accepted, 1U};
@@ -46,7 +46,7 @@ namespace Test {
         const auto result = Serial::TryWriteComplete(
             endpoint, std::span<const std::byte>(data)
         );
-        assert(result.Completed() && result.BytesAccepted == 3U);
+        assert(result.IsComplete() && result.BytesAccepted == 3U);
         assert(endpoint.Calls == 2U);
         assert(endpoint.Observed == 3U + 2U);
         assert(!endpoint.ObservedEmpty);

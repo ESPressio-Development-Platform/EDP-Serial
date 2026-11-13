@@ -56,11 +56,11 @@ namespace Demo {
         Endpoint endpoint;
         const auto initial = pump.Pump(endpoint);
         if (initial.Status != Serial::EdlgPumpStatus::WouldBlock ||
-            !pump.Pending() || initial.AcceptedFrameBytes != 0U) {
+            !pump.IsPending() || initial.AcceptedFrameBytes != 0U) {
             return 2;
         }
         const auto result = pump.Pump(endpoint);
-        if (!result.Completed() || pump.Pending() ||
+        if (!result.IsComplete() || pump.IsPending() ||
             result.AcceptedFrameBytes != 22U || endpoint.Used != 22U) {
             return 3;
         }

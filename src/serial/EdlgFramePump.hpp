@@ -33,7 +33,8 @@ namespace ESPressio::Serial {
         std::size_t AcceptedFrameBytes;
         std::size_t TotalFrameBytes;
 
-        [[nodiscard]] constexpr bool Completed() const noexcept {
+        /// Reports whether the endpoint accepted all bytes of the owned frame.
+        [[nodiscard]] constexpr bool IsComplete() const noexcept {
             return Status == EdlgPumpStatus::Complete;
         }
     };
@@ -74,7 +75,8 @@ namespace ESPressio::Serial {
         EdlgFramePump(EdlgFramePump&&) = delete;
         EdlgFramePump& operator=(EdlgFramePump&&) = delete;
 
-        [[nodiscard]] bool Pending() const noexcept { return _pending; }
+        /// Reports whether a complete frame is retained for an endpoint attempt.
+        [[nodiscard]] bool IsPending() const noexcept { return _pending; }
         [[nodiscard]] std::size_t AcceptedFrameBytes() const noexcept {
             return _pending ? _accepted : 0U;
         }

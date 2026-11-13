@@ -47,7 +47,8 @@ namespace ESPressio::Serial {
         WriteAttemptStatus Status{WriteAttemptStatus::Complete};
         std::size_t BytesAccepted{0U};
 
-        [[nodiscard]] constexpr bool Completed() const noexcept {
+        /// Reports whether the endpoint accepted the entire offered range.
+        [[nodiscard]] constexpr bool IsComplete() const noexcept {
             return Status == WriteAttemptStatus::Complete;
         }
     };
