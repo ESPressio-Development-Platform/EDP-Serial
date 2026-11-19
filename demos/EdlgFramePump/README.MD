@@ -7,8 +7,8 @@ The example composes opt-in EDP-Logging EDLG framing with EDP-Serial's fixed-siz
 ## Build targets
 
 - `Arduino_IDE/Arduino_IDE.ino`: install C++20-capable Arduino-ESP32 core and the required EDP packages from current compatible source branches. This file is a single self-contained IDE sketch.
-- `PlatformIO_Arduino`: `pio run -d demos/EdlgFramePump/PlatformIO_Arduino` using checked-out sibling ESPressio repositories at the actual qualified main refs.
-- `PlatformIO_ESP-IDF`: `pio run -d demos/EdlgFramePump/PlatformIO_ESP-IDF` with same sibling dependencies and ESP-IDF toolchain.
+- `PlatformIO_Arduino`: `pio run -d demos/EdlgFramePump/PlatformIO_Arduino` using the declared GitHub dependency URLs.
+- `PlatformIO_ESP-IDF`: `pio run -d demos/EdlgFramePump/PlatformIO_ESP-IDF` with the declared GitHub dependency URLs and ESP-IDF toolchain.
 
 All source layouts are explicit and package versions stay `0.1.0`. A successful compile is not proof of physical UART output. These examples are single-context and fail closed with a nonzero result rather than silently declaring a failed transfer successful. The named GCC/Clang host tests and genuine native provider qualification are documented separately; this example does not replace them.
 
@@ -17,3 +17,19 @@ application-selected EDP-Memory ByteOperations provider during framing.
 The optional FIFO uses a compile-time byte-copy provider and defaults to
 the existing EDP-Platform-Portable provider. Install those owners and
 their declared dependencies for the opt-in pump and queue demos.
+
+## PlatformIO dependency setup
+
+The two PlatformIO manifests declare GitHub URLs in lib_deps.
+Keep this demo's repository-owned source and project assets together,
+then run either command from the repository root:
+
+```sh
+pio run -d demos/EdlgFramePump/PlatformIO_Arduino
+pio run -d demos/EdlgFramePump/PlatformIO_ESP-IDF
+```
+
+PlatformIO downloads the libraries; sibling library checkouts and local
+dependency path overrides are unnecessary. Arduino-ESP32 selects the
+qualified3.3.12 framework and ESP-IDF5.5 library bundle. Project-owned
+partition files and build hooks are resolved within the demo itself.

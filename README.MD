@@ -426,6 +426,12 @@ for header activation and application-only provider edges.
 
 ## Documentation and examples
 
+PlatformIO demo projects declare their library dependencies as GitHub URLs
+in lib_deps. Run their pio commands directly with the repository-owned demo
+source/assets present; dependency resolution does not require sibling
+library checkouts. See the [demo index](./demos/README.MD).
+
+
 - [Architecture and byte endpoint contract](./docs/ARCHITECTURE.MD)
 - [EDLG Frame Pump](./docs/EDLG-FRAME-PUMP.MD)
 - [Bounded EDLG Frame Queue](./docs/BOUNDED-EDLG-FRAME-QUEUE.MD)

@@ -94,3 +94,11 @@ the physical endpoint across all participating writers.
 See [Architecture](./docs/ARCHITECTURE.MD), [frame pump](./docs/EDLG-FRAME-PUMP.MD),
 [bounded queue](./docs/BOUNDED-EDLG-FRAME-QUEUE.MD) and
 [Wiki Dependency Contracts](./wiki/Dependency-Contracts.md).
+
+## PlatformIO demo source resolution
+
+The demo manifests express their selected direct and supporting owner
+closure through explicit GitHub lib_deps URLs. The library's production
+dependency activation above is unchanged. Project-local source, partition
+files and framework setup hooks are application assets; dependencies are
+downloaded by PlatformIO.

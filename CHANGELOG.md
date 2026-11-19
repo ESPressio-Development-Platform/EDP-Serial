@@ -1,5 +1,11 @@
 # EDP-Serial Changelog
 
+## Demo dependency portability — unreleased0.1.0
+
+- PlatformIO demos now resolve library dependencies from explicit GitHub URLs.
+- Removed symlink and sibling-header dependency bypasses and reconciled consumer build guidance.
+- Arduino recipes retain the qualified framework/library bundle; native provider selection stays explicit.
+
 All current repository versions remain **0.1.0**. These are untagged development changes; do not create a release tag before the final exact-main, three-target demo and V2 compliance audit.
 
 ## Unreleased — 0.1.0

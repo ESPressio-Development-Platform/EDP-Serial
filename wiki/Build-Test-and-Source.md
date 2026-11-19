@@ -2,7 +2,7 @@
 
 The maintained C++20 source units are listed individually in [Reference Index](Reference-Index). Host tests: `CXX=g++ bash tests/run_host_tests.sh`, `CXX=g++ bash tests/run_logging_frame_host_tests.sh` (with `EDP_LOGGING_SOURCE_DIR` and `EDP_SYSTEM_SOURCE_DIR`), `CXX=g++ bash tests/run-bounded-edlg-queue-tests.sh` (with `EDP_SERIAL_DEPENDENCY_ROOT`). Repeat under `CXX=clang++`. The fake provider tests cover exact accepted prefixes, native WouldBlock and errors, zero-progress violation, EDLG CRC/partial frame ownership, FIFO ordering, mutex release poisoning and concurrent host producers.
 
-[Three target demo index](../demos/README.MD): `ByteEndpoint`, `EdlgFramePump`, `BoundedEdlgFrameQueue`, each with Arduino IDE, PlatformIO Arduino-ESP32 and ESP-IDF. They compile/run only on explicitly compatible C++20 SDKs and selected sibling EDP source deps. The PIO manifests pin one known PIOArduino revision and use sibling source paths, not an invented published PlatformIO registry package. The examples are **memory-only** and do not replace actual UART or native RTOS provider tests.
+[Three target demo index](../demos/README.MD): `ByteEndpoint`, `EdlgFramePump`, `BoundedEdlgFrameQueue`, each with Arduino IDE, PlatformIO Arduino-ESP32 and ESP-IDF. They compile/run only on explicitly compatible C++20 SDKs and GitHub-resolved EDP library dependencies. The PIO manifests pin one known PIOArduino revision and resolve explicit GitHub library URLs. The examples are **memory-only** and do not replace actual UART or native RTOS provider tests.
 
 The historical Logging post-main run `20261112T092223-3f2f828e` passed eight companion host checks on the earlier feature revisions. The exact current FIFO run `20261112T114409-376d71e0` passed GCC, Clang and both Arduino-ESP32 and ESP-IDF compile/link targets. Package probe `20261112T114843-3df68cf8` compiled an Arduino-ESP32 consumer using only the Serial package declaration and independently verified the resolved EDP-System `main` source. The FIFO's Arduino IDE sketch is byte-identical to the compiled Arduino demo source. Standalone Arduino IDE and physical UART delivery are distinct validation surfaces.
 
@@ -26,3 +26,11 @@ both compilers: six runner executions. The local Markdown check resolved105
 links. Runtime source, tests, demos, manifests and workflows are unchanged
 from Serial/main b021ff65fb405937ce2d097d17abe0d59422556e.
 The subsequent Wiki ledger update does not change any tutorial code block.
+
+## GitHub-resolved PlatformIO demos
+
+Current demo manifests fetch library dependencies through GitHub lib_deps
+URLs. The source/profile migration and exact isolated-build receipts are
+tracked in the [Policy handoff](https://github.com/ESPressio-Development-Platform/Policy/blob/main/Handoff/2026-11-19/2026-11-19-09-25-Logging-Estate-Demo-GitHub-Dependencies.MD).
+These recipe builds are separate from earlier physical UART/archive
+qualification. No fresh hardware execution is implied.
