@@ -34,3 +34,16 @@ URLs. The source/profile migration and exact isolated-build receipts are
 tracked in the [Policy handoff](https://github.com/ESPressio-Development-Platform/Policy/blob/main/Handoff/2026-11-19/2026-11-19-09-25-Logging-Estate-Demo-GitHub-Dependencies.MD).
 These recipe builds are separate from earlier physical UART/archive
 qualification. No fresh hardware execution is implied.
+
+All six GitHub-resolved PlatformIO Serial recipes passed on19 November2026.
+ByteEndpoint: Arduino20261119T093103-142a603b and native20261119T093103-166205fd.
+Frame-pump and bounded-queue Arduino cases passed within20261119T094437-9c5c966d
+before that larger matrix's separate Logging failure. Both native cases
+passed within20261119T094437-f381dc01. The proof is per-case markers and
+actual linked firmware, with matching current manifest bytes.
+
+The isolated inputs contain demo assets, without a local production library
+src tree or sibling checkouts. Public dependencies came directly from
+GitHub; private Logging used the appliance's authorized GitHub mirror
+transport cache. No credentials enter the manifests. This qualifies the
+recipes and selected source closure, without a fresh UART execution claim.
