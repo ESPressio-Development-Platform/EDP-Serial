@@ -6,6 +6,9 @@ All current repository versions remain **0.1.0**. These are untagged development
 
 ### Added
 
+- Consumer-first README with progressive, executable C++20 byte-write, backpressure, EDLG frame and bounded queue examples, reproducible host commands and an explicit native UART adaptation path.
+- Complete conditional dependency trees for the writer's Memory contract and the queue's direct Portable include. Reconciled affected normative and Wiki signatures and current-main status.
+
 - C++20 EDP-System Composition domain with exactly one explicit `ByteStreamWriter` provider and a nonblocking, noexcept, byte-span `ByteWriteEndpoint` concept.
 - Status-typed `TryWriteComplete` bounded transfer loop preserving the exact accepted prefix on immediate WouldBlock/provider failure, and rejecting illegal zero-progress or oversized provider reports.
 - Optional `EdlgFramePump` with a statically owned complete CRC-checked EDP-Logging EDLG frame and reliable partial-byte state across attempts. No hidden retries, dynamic storage or automatic Native provider.

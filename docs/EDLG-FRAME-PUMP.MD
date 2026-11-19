@@ -1,27 +1,64 @@
-# Optional EDLG Serial complete-frame pump (partial Logging sink)
+# EDLG complete-frame pump
 
-**Branch:** EDP-Serial `feature/logging-v1`, version **0.1.0**. **Optional source only:** `#include <serial/EdlgFramePump.hpp>`. The default EDP-Serial umbrella and `library.json` dependency on EDP-System are unchanged. This feature additionally requires **EDP-Logging** (for `logging/EdlgFrame.hpp`) at the *application's explicit opt-in build layer*. This is a downstream Serial→Logging edge; there is **no Logging→Serial reverse edge**, and no concrete platform import.
+Version0.1.0, implemented on main. Import `serial/EdlgFramePump.hpp`
+explicitly. The default Serial umbrella remains System-only. The pump
+directly imports Logging's `EdlgFrameWriter.hpp`, whose ByteOperations
+contract imposes the transitive Memory dependency. See the complete
+[Dependency Graph](../DEPENDENCY_GRAPH.MD) and
+[progressive consumer example](../README.MD#4-add-a-complete-edlg-frame).
 
-## API and bounded state
+## State, capacity and admission
 
-`EdlgFramePump<TMaximumPayloadBytes>` owns exactly one static `std::array<std::byte, TMaximumPayloadBytes+20>` plus size, accepted-offset and pending flag. It cannot be copied or moved. The payload maximum is statically restricted to the existing EDLG v1 32-bit payload-length field and checked against `size_t` overflow.
+`EdlgFramePump<TMaximumPayloadBytes>` owns exactly one
+`std::array<std::byte, TMaximumPayloadBytes + 20U>` and its size, accepted
+offset and pending flag. It is noncopyable and nonmovable. Capacity must
+fit the canonical32-bit payload length and must not overflow size_t.
 
-`Begin(codec,encodedPayload)` uses **EDP-Logging's canonical `WriteEdlgFrame`** and copies the entire frame into private fixed storage before publishing `EdlgPumpBeginStatus::Queued`; the caller can immediately reuse/mutate the payload buffer. A pending frame causes `Busy` with **no mutation**, rather than silent replacement; other outcomes `InvalidCodec`, `InvalidPayload` leave no frame pending. Each queued frame has the canonical `EDLG` v1 header, CRC32C, payload and `GLDE` trailer, not a raw in-memory C++ object.
+`Begin(codec, encodedPayload, byteOperations)` borrows an existing
+application-selected Memory-compatible byte provider during framing.
+Logging's canonical writer copies the whole payload into the pump's fixed
+EDLG header/CRC32C/payload/trailer representation before Queued is published.
+The provider is not retained. The caller can reuse its source after success.
 
-`Pump(applicationComposedByteWriteEndpoint)` calls the existing EDP-Serial `TryWriteComplete` only on the *unaccepted suffix*. It performs no polling sleeps, zero-progress loop, heap allocation, duplicate CRC/CBOR serializer or new clock. Its typed `EdlgPumpResult` reports `NoFrame`, `Complete`, `WouldBlock`, `ProviderFailure` or `ProviderContractViolation`, with **exact validated cumulative accepted-frame bytes** and total frame size. The pending frame remains byte-for-byte owned across `WouldBlock`, partial provider errors and malformed provider responses; no new frame may start until it is complete. The helper deliberately exposes NO unsafe `Abort` of a partially emitted stream: a transport reset and explicit loss-provenance policy must be owned by the eventual concrete sink. `Complete` means only **the endpoint accepted bytes**, not that another device received them, that hardware flushed, or that a persistent archive committed them.
+Busy preserves an existing pending frame. InvalidCodec and InvalidPayload
+do not install a new frame. There is no unchecked replacement or abort
+operation for a partially emitted frame.
 
-**Concurrency is NOT solved by the pump.** The entire endpoint must be **exclusively reserved** for this pump's pending frame for every native write attempt. A second pump or direct UART/Console writer can still interleave bytes if Bootstrap does not impose a whole-frame exclusivity/queue policy. The code does not assume native UART atomic writes; its `Busy` protection prevents only replacement in this pump. This is NOT the complete D1–D13 Logging sink or durable archive.
+## Output and ownership
 
-**Lifetime:** the pump's internal buffer must outlive each accepted native write. The EDP-Serial `ByteWriteEndpoint` capability explicitly forbids providers from retaining its borrowed pointer after `TryWrite` returns; asynchronous DMA borrowing needs a separate provider ownership/acknowledgement capability. The application must retain the pump and endpoint until the record completes or a formal transport reset/loss event is registered. No generated LogRecord TypeIdentifier, Serial-Arduino provider or Serial-ESP-IDF provider has been introduced here.
+`Pump(endpoint)` calls TryWriteComplete on the unaccepted suffix only.
+It reports NoFrame, Complete, WouldBlock, ProviderFailure or
+ProviderContractViolation, plus cumulative accepted-frame bytes and total
+frame bytes. Pending state survives noncomplete output. Complete clears
+the pending frame after its entire byte range is accepted by the endpoint.
 
-## Test results / qualification gaps
+There is no polling sleep, readiness loop, heap allocation or serializer
+duplicate. The byte endpoint must copy or consume accepted bytes before
+returning. Complete establishes endpoint acceptance, not physical UART
+flush, peer receipt or durable storage.
 
-`tests/EdlgFramePumpTests.cpp` imports the **actual EDP-Logging EDLG writer** and EDP-System Composition-qualified fake Serial ByteStreamWriter. Tests verify copied source lifetime, exact 23-byte canonical `abc` EDLG golden fixture (matching Logging C++/Python vector), partial 7-byte + WouldBlock + 16-byte resume, rejection of a second frame while pending, provider failure after partial accepted prefix, malformed provider no-progress failure and later successful continuation, invalid codec, oversized payload and null nonempty input. Test runner `tests/run_logging_frame_host_tests.sh` needs the EDP-System and EDP-Logging **direct** source roots supplied via `EDP_SYSTEM_SOURCE_DIR`/`EDP_LOGGING_SOURCE_DIR`; default core `tests/run_host_tests.sh` never pulls Logging into the base library.
+The application reserves the entire physical endpoint for this frame
+across all service attempts. Another writer bypassing the pump can
+interleave data. Keep the pump and endpoint alive until completion or a
+formally handled transport reset/loss event. A partial provider failure
+requires the provider's recovery contract before further use.
 
-GCC/Clang optional frame pump **and core EDP-Serial** host suites PASS, RPI400 detached `20261016T083148-54fa5f8c`. Xtensa ESP32 C++20 compile-only syntax of the same actual optional test PASS `20261016T083207-c1219033`. No linked Arduino/ESP-IDF app, RPI USB/UART output, physical peripheral/ToF/radio or complete-frame concurrent writer/HIL evidence. EDP-Serial-Arduino and EDP-Serial-ESP-IDF remain empty stubs.
+## Relationship to generated records and queues
 
-The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
-application-selected EDP-Memory ByteOperations provider during framing.
-The optional FIFO uses a compile-time byte-copy provider and defaults to
-the existing EDP-Platform-Portable provider. Install those owners and
-their declared dependencies for the opt-in pump and queue demos.
+The pump frames already encoded CBOR or JSON. It does not generate or
+validate a complete typed LogRecord schema or persist an archive.
+[BoundedEdlgFrameQueue](BOUNDED-EDLG-FRAME-QUEUE.MD) adds finite complete-frame
+admission and synchronization for participating writers. Concrete
+EDP-Serial-ESP-IDF supplies a separate native UART endpoint; generic
+Serial-Arduino remains a placeholder.
+
+## Validation
+
+EdlgFramePumpTests exercises copied source lifetime, the canonical golden
+frame, partial output, WouldBlock/resume, provider failures and invalid
+codec/payload/contract outcomes. Run tests/run_logging_frame_host_tests.sh
+with the selected owner root through EDP_SERIAL_DEPENDENCY_ROOT and explicit
+EDP_LOGGING_SOURCE_DIR/EDP_SYSTEM_SOURCE_DIR where needed.
+The [Wiki ledger](../wiki/Build-Test-and-Source.md) records distinct host,
+target and composed physical qualification. No hardware proof follows
+from a README program or host fake endpoint.

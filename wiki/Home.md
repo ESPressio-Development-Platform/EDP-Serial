@@ -1,6 +1,6 @@
 # EDP-Serial — developer Wiki
 
-**Version 0.1.0**, current source on `feature/logging-v1` until guarded `main` promotion. This is the *platform-neutral* EDP-System Composition-owned bounded Serial byte endpoint, opt-in canonical EDLG framing/pumping and one fixed-capacity ordinary-context FIFO. It does not own UART, CDC, task scheduling, peripheral setup, physical delivery or persistence.
+**Version 0.1.0**, current source on `main`. This is the *platform-neutral* EDP-System Composition-owned bounded Serial byte endpoint, opt-in canonical EDLG framing/pumping and one fixed-capacity ordinary-context FIFO. It does not own UART, CDC, task scheduling, peripheral setup, physical delivery or persistence.
 
 The default [public umbrella](Reference-serial-ESPressio_Serial) requires only EDP-System; opt-in [EDLG Pump](Reference-serial-EdlgFramePump) adds EDP-Logging; opt-in [FIFO](Reference-serial-BoundedEdlgFrameQueue) also adds the EDP-Threading ordinary Mutex. The native UART TX concrete belongs to a separate EDP-Serial-ESP-IDF repository.
 

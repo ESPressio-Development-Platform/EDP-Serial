@@ -1,52 +1,96 @@
-# EDP-Serial Dependency Graph
+# EDP-Serial dependency graph
 
-Package version **0.1.0**. The default package resolves EDP-System from its `main` branch.
+Version 0.1.0. Dependencies follow the headers selected by the application.
+The default package manifest declares EDP-System; optional headers require
+the additional owner closure below.
 
-## Current full mandatory dependency tree
+## Direct activation
+
+| Direct owner | Condition | Contract used |
+| --- | --- | --- |
+| EDP-System | Always, through `ESPressio_Serial.hpp` | Serial domain, provider capability and Composition requirements |
+| EDP-Logging | Import `serial/EdlgFramePump.hpp` or `serial/BoundedEdlgFrameQueue.hpp` | `logging/EdlgFrameWriter.hpp`, EDLG framing and codec vocabulary |
+| EDP-Platform | Import `serial/BoundedEdlgFrameQueue.hpp` | Short independent SpinLock contract for status publication |
+| EDP-Threading | Import `serial/BoundedEdlgFrameQueue.hpp` | Ordinary keyed Mutex contract for frame and endpoint ownership |
+| EDP-Platform-Portable | Import `serial/BoundedEdlgFrameQueue.hpp` | Default stateless byte-copy provider, included directly by the header |
+
+The Portable header is included unconditionally inside the optional queue
+header. Supplying a custom fifth template argument changes the selected
+byte provider but does not remove that include dependency.
+EDP-Memory is reached through Logging's optional writer and Portable;
+it is not an additional direct source import of EDP-Serial.
+
+## Complete EDP closure
+
+The tree shows the union of the two optional profiles. Without the pump
+or queue, only the mandatory System edge applies.
 
 ```text
 EDP-Serial
-└── EDP-System [mandatory]
-```
-
-The **only direct EDP dependency** is EDP-System's static Composition Framework. `Serial::Domain` and the exclusive `Serial::ByteStreamWriter` capability define a same-domain, exactly-one-provider requirement. The C++20 `ByteWriteEndpoint` concept checks that a Bootstrap-chosen endpoint advertises `CompositionOffers::Contains<ByteStreamWriter>` and has a conformant `noexcept TryWrite` operation. EDP-System has no further EDP dependency; the current dependency graph is acyclic.
-
-The default umbrella imports only the platform-neutral endpoint contracts. Optional headers select their additional owners explicitly. Host tests use a fake provider deriving from `EDP-System::CompositionFramework::Provider`, with exact source/include root controlled by `EDP_SYSTEM_SOURCE_DIR`.
-
-## Optional EDLG FIFO (activated only by explicit header import)
-
-`<serial/BoundedEdlgFrameQueue.hpp>` enables three direct conditional dependencies of **EDP-Serial** in addition to its mandatory EDP-System domain:
-
-- **EDP-Logging** (existing optional pure C++20 canonical EDLG writer, through the previously introduced `EdlgFramePump.hpp`). The default Logging umbrella remains free of Serial; the direction is **Serial→Logging only**, with no reverse edge.
-- **EDP-Platform** `Synchronization::SpinLock` abstract Composition provider for very short independently published depth/poison state snapshots (including after the ordinary Mutex Release failed). Its native concrete must be app-selected, and the SpinLock must never be held while waiting, copying frames, or writing UART.
-- **EDP-Threading** `OrdinaryMutex<Identity>` abstract Composition provider, with a single native NoWait TryAcquire and typed Release. Threading's owner graph already includes EDP-System, EDP-Platform, EDP-Clock, EDP-Memory and EDP-BoundedTopology as declared in Threading's dependency graph. This does not select a concrete platform Mutex in EDP-Serial.
-
-```text
-EDP-Serial (optional FIFO profile)
-├── EDP-System [mandatory baseline]
-├── EDP-Logging [conditional EDLG framing, no reverse edge]
-├── EDP-Platform [conditional short SpinLock for status publication]
+├── EDP-System [mandatory: default byte endpoint and Composition]
+├── EDP-Logging [optional: import EdlgFramePump.hpp or BoundedEdlgFrameQueue.hpp]
+│   └── EDP-Memory [imposed by Logging's EdlgFrameWriter.hpp]
+│       ├── EDP-System
+│       ├── EDP-Platform
+│       │   └── EDP-System
+│       └── EDP-BoundedTopology
+├── EDP-Platform-Portable [optional: import BoundedEdlgFrameQueue.hpp]
+│   ├── EDP-Platform
+│   │   └── EDP-System
+│   └── EDP-Memory
+│       ├── EDP-System
+│       ├── EDP-Platform
+│       │   └── EDP-System
+│       └── EDP-BoundedTopology
+├── EDP-Platform [optional: import BoundedEdlgFrameQueue.hpp]
 │   └── EDP-System
-└── EDP-Threading [conditional ordinary-context mutex abstraction]
+└── EDP-Threading [optional: import BoundedEdlgFrameQueue.hpp]
     ├── EDP-System
-    ├── EDP-Platform -> EDP-System
-    ├── EDP-Clock -> EDP-Platform, EDP-System
+    ├── EDP-Platform
+    │   └── EDP-System
+    ├── EDP-Clock
+    │   ├── EDP-System
+    │   └── EDP-Platform
+    │       └── EDP-System
     ├── EDP-BoundedTopology
-    └── EDP-Memory -> EDP-Platform, EDP-System, EDP-BoundedTopology
+    └── EDP-Memory
+        ├── EDP-System
+        ├── EDP-Platform
+        │   └── EDP-System
+        └── EDP-BoundedTopology
 ```
 
-The opt-in application manifest must name all **actually activated direct edges**; the default `library.json` remains System-only. No circular dependencies or platform-specific concrete import were added by the FIFO. The previous native atomic<bool> and atomic<size_t> compile-time lock-free assumptions were **both false** under PIOArduino ESP32-WROOM; the caller must inject the existing qualified EDP-Platform SpinLock as the *fourth template argument* instead. The application must declare this direct EDP-Platform edge rather than rely on Threading's transitive import.
+EDP-System and EDP-BoundedTopology have no additional EDP dependency in
+this selected closure. The graph is acyclic. Header discovery is not a
+substitute for declaring every activated direct owner in the consuming
+application's build configuration.
 
-## Concrete consumers and other possible conditional graphs
+## Application-selected concrete providers
 
-- `EDP-Serial-Arduino -> EDP-Serial` with platform-specific concrete UART/USB provider and its own necessary platform abstraction/SDK edges
-- **CURRENT downstream implementation, not future:** `EDP-Serial-ESP-IDF -> EDP-Serial` with an explicit ESP-IDF UART TX FIFO native concrete. This abstract Serial package does not depend on it and does not automatically configure a UART.
-- **NOW ACTIVATED CONDITIONALLY**: `EDP-Serial -> EDP-Logging` only for applications importing `<serial/EdlgFramePump.hpp>`. This optional, direct dependency is on the EDP-Logging **abstract EDLG framing source**; its default umbrella and default `library.json` include remain unmodified. No Logging->Serial reverse edge or platform concrete link. Application build configuration MUST explicitly declare both EDP-Serial and EDP-Logging; it MUST NOT infer the optional edge from transitive includes. The optional writer consumes EDP-Memory ByteOperations. The frame pump uses native EDP-Serial's EDP-System Composition-qualified ByteWriteEndpoint. The pump composes the writer’s Memory owner contract.
+The abstract Serial owner imports no concrete UART/USB provider.
+EDP-Serial-ESP-IDF depends on EDP-Serial and its native ESP-IDF
+`esp_driver_uart` SDK component. A generic EDP-Serial-Arduino concrete
+remains unimplemented. Neither creates a reverse abstract dependency.
 
-Every eventual application Bootstrap must explicitly compose exact provider capability, source ownership, endpoint concurrency, partial-output framing and lifetime. Actual activated optional edges must be re-audited for cycles, transitive dependency trees and build validity.
+The [README host tutorial](./README.MD#getting-started) directly selects
+Portable byte operations for its memory endpoint. Its queue program also
+selects the existing Portable Mutex and SpinLock through the Threading
+ordinary-mutex adapter. Those are application choices. Embedded applications
+select their qualified native providers explicitly.
 
-The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
-application-selected EDP-Memory ByteOperations provider during framing.
-The optional FIFO uses a compile-time byte-copy provider and defaults to
-the existing EDP-Platform-Portable provider. Install those owners and
-their declared dependencies for the opt-in pump and queue demos.
+Logging's minimal umbrella has no EDP dependencies, but the pump imports
+its separate writer header, whose Memory dependency is imposed. The edge
+is Serial to Logging; Logging has no reverse Serial dependency.
+
+## Ownership across these edges
+
+The endpoint must copy or consume every accepted byte before returning.
+The frame pump owns its framed copy across partial writes. The queue
+borrows one keyed ordinary mutex and a separate short SpinLock; both must
+outlive it. Frame copying and endpoint I/O occur outside the short state
+SpinLock. The application owns service scheduling and exclusive access to
+the physical endpoint across all participating writers.
+
+See [Architecture](./docs/ARCHITECTURE.MD), [frame pump](./docs/EDLG-FRAME-PUMP.MD),
+[bounded queue](./docs/BOUNDED-EDLG-FRAME-QUEUE.MD) and
+[Wiki Dependency Contracts](./wiki/Dependency-Contracts.md).

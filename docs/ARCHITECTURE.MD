@@ -1,15 +1,74 @@
-# EDP-Serial domain architecture — initial contract only
+# EDP-Serial architecture and byte endpoint contract
 
-`EDP-Serial` is a platform-neutral capability owner for bounded byte-oriented serial endpoints. Bootstrap must select an application-owned concrete provider. `EDP-Serial-ESP-IDF` already supplies a real IDF-backed UART TX FIFO provider under its separate feature branch; generic `EDP-Serial-Arduino` remains a placeholder. the domain itself contains **no** Arduino/ESP-IDF SDK, transport and logging record definitions, global console or mutex.
+EDP-Serial owns platform-neutral bounded byte-write contracts and optional
+complete-frame output composition. Its implementation is on main, version
+0.1.0. The [README tutorial](../README.MD#getting-started) introduces the API;
+this document defines its endpoint boundary.
 
-**Interface:** `serial/SerialComposition.hpp` declares the EDP-System `Serial::Domain`, exclusive `ByteStreamWriter` capability and exactly-one same-domain provider requirement. The compile-time `ByteWriteEndpoint<T>` concept requires a Bootstrap-selected provider's `CompositionOffers` to contain that capability, plus a `noexcept` borrowed `TryWrite(span<const byte>)` returning typed `ByteWriteResult` status and count. `TryWriteComplete` is a bounded *one attempt* to consume a caller-owned finite span. Each Accepted response must advance the offset; it terminates immediately on WouldBlock, failure or malformed result. There is no busy loop on WouldBlock, hidden deadline or blocking wait. Exactly reported prefix bytes are not treated as necessarily durable or delivered. Invalid provider response returns the already validated prefix only.
+## Composition and provider selection
 
-**Ownership:** a conforming provider must synchronously accept/copy bytes before returning from `TryWrite` and **must never retain the caller's borrowed pointer past return**. A future asynchronous DMA/USB provider that needs borrowed-memory lifetime must expose a separate explicitly qualified ownership/acknowledgement contract; it does not satisfy this simple synchronous-acceptance capability. The result makes no claim of physical UART transmission/flush or remote receipt. Logging must not regard a successful Serial write as host delivery. Multiple writers require a higher-level complete-frame coordinator/lock; this generic domain makes no guarantees about byte interleaving.
+`SerialComposition.hpp` declares an EDP-System Composition domain, the
+exclusive ByteStreamWriter capability and the exactly-one, same-domain
+ByteStreamWriterRequirement. A conforming provider advertises that offer
+and implements noexcept TryWrite(span<const byte>) returning ByteWriteResult.
+The ByteWriteEndpoint concept checks the offer and operation signature.
 
-**Composition/dependencies:** C++20 standard library plus **EDP-System** Composition abstraction. No platform-specific provider is imported. Concrete providers including already implemented EDP-Serial-ESP-IDF depend on the abstract `EDP-Serial`; an optional Serial sink integration can depend on `EDP-Logging` behind a declared condition but **EDP-Logging MUST NOT depend on Serial**. No legacy `ESPressio-*` library source.
+Bootstrap selects the concrete provider, owns its configuration and keeps
+it alive for every operation. Serial supplies no global console or implicit
+peripheral. EDP-Serial-ESP-IDF/main supplies the separate native UART FIFO
+provider; EDP-Serial-Arduino remains a placeholder.
 
-**Optional downstream EDLG frame bridge:** `serial/EdlgFramePump.hpp` is imported only when an application opts in and declares a direct EDP-Logging dependency. It reuses Logging's EDLG writer, owns one complete frame in bounded static memory and resumes exact suffix byte output across native partial-write failures. It does NOT arbitrate multiple independent producers sharing the actual UART/CDC/USB endpoint, and does NOT guarantee physical transmission, transport flush or durable LogRecord delivery. See `docs/EDLG-FRAME-PUMP.MD`.
+## Accepted-prefix ownership
 
-**Additional optional FIFO:** `serial/BoundedEdlgFrameQueue.hpp` stores a caller-configured fixed number of complete EDLG pumps with bounded capacity and uses one Bootstrap-selected EDP-Threading OrdinaryMutex `TryAcquire`/NoWait **and a separately borrowed short EDP-Platform SpinLock for independent depth/poison publication** to serialize all participating producers and one worker PumpNext over a shared exclusive endpoint. The mutex is held across one bounded PumpNext (not across WouldBlock until a future worker call), with the same FIFO head retained until full endpoint acceptance. Native mutex Release failure is a sticky poison, not a success. This adds two conditional direct owner edges, EDP-Threading **and EDP-Platform**, to the existing conditional EDP-Logging one; neither is imported by the default Serial umbrella. **Bootstrap must prohibit external writes to that same endpoint.** See `docs/BOUNDED-EDLG-FRAME-QUEUE.MD`.
+A provider synchronously consumes or copies the exact accepted prefix before
+returning. It never retains the caller's borrowed pointer after return.
+Accepted means provider acceptance; on-wire transmission, remote receipt,
+flush and durable retention are separate contracts.
 
-**Outstanding:** application/target concrete providers, DMA-specific borrowed-lifetime capability, partial UART/CDC/USB writes, IRQ behavior, lifetime/DMA ownership, select hardware, secure console arbitration, Logging sink, host capture and on-device tests. Package version stays **0.1.0**. These remain gates before claiming a usable physical Serial endpoint.
+TryWriteComplete accepts a finite borrowed span and advances only by validated
+provider progress. Accepted must advance at least one byte. WouldBlock must
+report zero accepted bytes. Counts above the offered range, unknown status
+and illegal progress fail closed with ProviderContractViolation.
+
+The algorithm makes at most bytes.size() provider calls on nonempty input
+and returns immediately on WouldBlock or provider failure. A provider
+failure can accompany an accepted prefix; its exact count remains observable.
+The application decides whether recovery permits another attempt at the
+unsent suffix. No rollback or hidden readiness wait is supplied.
+
+## Concurrency and lifetime
+
+The basic endpoint algorithm requires exclusive ownership for its call.
+The application must prevent independent writers from interleaving a
+multi-call logical frame. DMA/USB implementations retaining source pointers
+need a separate lifetime/acknowledgement contract and do not satisfy this
+simple synchronous-acceptance boundary.
+
+An EdlgFramePump owns one fixed complete frame across partial writes.
+Reserve its endpoint across all attempts until completion or an explicit
+transport reset/loss decision. The BoundedEdlgFrameQueue serializes its
+participating producers and service context with an existing Threading
+ordinary mutex and publishes status through a separate Platform SpinLock.
+It creates no worker. Writers bypassing that queue remain outside its
+serialization.
+
+## Conditional owner dependencies
+
+The default umbrella consumes only EDP-System. The pump imports Logging's
+EdlgFrameWriter.hpp, which consumes EDP-Memory ByteOperations. The queue
+also directly imports EDP-Platform, EDP-Threading and EDP-Platform-Portable.
+The Portable include remains required with a custom queue byte provider.
+See the complete [Dependency Graph](../DEPENDENCY_GRAPH.MD).
+
+## Integration and qualification boundaries
+
+Use [EDLG Frame Pump](EDLG-FRAME-PUMP.MD) and
+[Bounded EDLG Frame Queue](BOUNDED-EDLG-FRAME-QUEUE.MD) for their typed
+outcomes, resource lifetimes and failure recovery. The
+[Wiki build ledger](../wiki/Build-Test-and-Source.md) separates host tests,
+target builds and actual application UART evidence.
+
+Physical providers, pins, baud, service timing, interrupt eligibility and
+transport recovery require explicit application/native contracts. This
+abstract library does not guarantee end-to-end delivery, hard real-time
+completion, archive persistence or a generic Arduino transport.

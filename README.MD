@@ -1,29 +1,405 @@
 # EDP-Serial
 
-Platform-neutral, bounded, non-blocking serial byte endpoint contracts for the ESPressio Development Platform.
+Bounded serial byte output for the [ESPressio Development Platform](https://github.com/ESPressio-Development-Platform).
+**C++20 · Version 0.1.0 · Apache-2.0**
 
-**Status:** source-complete platform-neutral Serial abstraction plus optional EDLG frame-pump and bounded FIFO, under `feature/logging-v1`, version **0.1.0**. A separate ESP-IDF native UART concrete exists in **EDP-Serial-ESP-IDF**; this abstract library itself does not configure UART/USB, own a console, start a worker or guarantee wire delivery. Target demonstration builds are being independently qualified before any `main` promotion.
+EDP-Serial lets application code write to an explicitly selected byte endpoint,
+preserve partial progress when it cannot accept more data, and optionally send
+complete CRC-checked EDLG frames through a finite FIFO. The endpoint can be a
+memory capture, the existing ESP-IDF UART provider, or another conforming
+application-selected provider.
+
+| Capability | Entry point |
+| --- | --- |
+| Write bytes and inspect the exact accepted prefix | `ESPressio_Serial.hpp` / `TryWriteComplete` |
+| Retain one complete EDLG frame across partial writes | `serial/EdlgFramePump.hpp` |
+| Admit complete frames into a fixed-capacity, synchronized FIFO | `serial/BoundedEdlgFrameQueue.hpp` |
+
+The application owns endpoint selection, resource lifetimes and service
+scheduling. Acceptance describes bytes copied or consumed by the endpoint;
+physical transmission, remote receipt and persistence require separate
+provider/application contracts.
+
+## Getting started
+
+The following steps build three small host programs. Each returns zero on
+success and captures bytes in memory, so no UART or connected device is needed.
+The final step explains how to select the existing ESP32 UART provider.
+
+### 1. Install the selected dependencies
+
+Check out the EDP libraries as sibling folders under one source root.
+For these host examples, obtain EDP-Serial, EDP-System, EDP-Logging,
+EDP-Platform, EDP-Platform-Portable, EDP-Memory, EDP-Threading, EDP-Clock
+and EDP-BoundedTopology from their `main` branches.
+
+The basic Serial package itself requires only EDP-System. The tutorial's
+memory endpoint additionally selects Portable byte operations; later steps
+activate Logging and Threading. The [dependency tree](#dependencies)
+explains those conditions.
+
+Use a C++20 compiler. For ESP32 PlatformIO projects, use the
+[PIOArduino platform](https://github.com/pioarduino/platform-espressif32)
+and the [maintained target-specific examples](./demos/README.MD).
+
+### 2. Supply a byte endpoint
+
+Save this as `MemoryEndpoint.hpp`. A provider advertises the existing
+`ByteStreamWriter` capability and returns a typed status plus an exact
+accepted-byte count. This teaching endpoint copies into 128 fixed bytes,
+accepts at most four bytes per provider call, and can simulate backpressure.
+It uses the existing Memory byte-copy provider.
+
+```cpp
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <span>
+
+#include <ESPressio_Serial.hpp>
+#include <ESPressio_Platform_Portable_ByteOperations.hpp>
+
+namespace Tutorial {
+
+    namespace Serial = ESPressio::Serial;
+
+    /// Memory-only endpoint: synchronously copies up to four bytes per call.
+    class MemoryEndpoint final : public Serial::Framework::Provider<
+        Serial::Domain,
+        Serial::Framework::Offers<
+            Serial::Framework::Offer<Serial::ByteStreamWriter>
+        >
+    > {
+
+    private:
+
+        // Finite application-owned capture state; access from one context.
+
+        /// Bytes accepted by this endpoint, with no UART or external receiver.
+        std::array<std::byte, 128U> _output{};
+        /// Number of bytes already copied into the capture.
+        std::size_t _used{0U};
+        /// Requests one simulated backpressure result before the next copy.
+        bool _pauseNext{false};
+
+    public:
+
+        // Endpoint operations and read-only capture inspection.
+
+        /// Makes the next non-empty write attempt report WouldBlock.
+        void PauseNextWrite() noexcept {
+            _pauseNext = true;
+        }
+
+        /// Accepts an independent copy before the caller's borrowed span expires.
+        [[nodiscard]] Serial::ByteWriteResult TryWrite(
+            std::span<const std::byte> bytes
+        ) noexcept {
+            if (_pauseNext) {
+                _pauseNext = false;
+                return {Serial::ByteWriteStatus::WouldBlock, 0U};
+            }
+            auto count = std::min(
+                bytes.size(),
+                _output.size() - _used
+            );
+            count = std::min(
+                count,
+                std::size_t{4U}
+            );
+            if (count == 0U) {
+                return {Serial::ByteWriteStatus::WouldBlock, 0U};
+            }
+            const ESPressio::Platform::Portable::Memory::ByteOperationsProvider copy{};
+            copy.CopyBytes(
+                _output.data() + _used,
+                bytes.data(),
+                count
+            );
+            _used += count;
+            return {Serial::ByteWriteStatus::Accepted, count};
+        }
+
+        /// Borrows the captured bytes; valid while this endpoint remains alive.
+        [[nodiscard]] std::span<const std::byte> Captured() const noexcept {
+            return {
+                _output.data(),
+                _used
+            };
+        }
+
+    };
+
+    static_assert(Serial::ByteWriteEndpoint<MemoryEndpoint>);
+
+} // namespace Tutorial
+```
+
+A production provider must consume or copy the accepted prefix before returning.
+It must keep no borrowed pointer after `TryWrite` returns. See the
+[endpoint contract](./docs/ARCHITECTURE.MD) when adapting another transport.
+
+### 3. Write bytes and resume after backpressure
+
+Save this as `byte-writes.cpp`. `TryWriteComplete` advances over partial
+acceptance and stops immediately at `WouldBlock` or failure. A later
+application service opportunity resumes the unsent suffix.
+
+```cpp
+#include "MemoryEndpoint.hpp"
+
+int main() {
+    namespace Serial = ESPressio::Serial;
+    Tutorial::MemoryEndpoint endpoint{};
+    const std::array<std::byte, 6U> message{
+        std::byte{'H'}, std::byte{'e'}, std::byte{'l'},
+        std::byte{'l'}, std::byte{'o'}, std::byte{'\n'}
+    };
+
+    endpoint.PauseNextWrite();
+    const auto first = Serial::TryWriteComplete(
+        endpoint,
+        message
+    );
+    if (first.Status != Serial::WriteAttemptStatus::WouldBlock) {
+        return 1;
+    }
+
+    // A later application service opportunity resumes only the unsent suffix.
+    const auto remaining = std::span<const std::byte>(message).subspan(first.BytesAccepted);
+    const auto resumed = Serial::TryWriteComplete(
+        endpoint,
+        remaining
+    );
+    return resumed.IsComplete() &&
+        first.BytesAccepted + resumed.BytesAccepted == message.size() &&
+        endpoint.Captured().size() == message.size() ? 0 : 2;
+}
+```
+
+This example deliberately pauses once, then completes the six-byte message
+through multiple provider calls. There is no retry loop waiting for readiness.
+On `ProviderFailure`, retain the reported prefix and consult the provider's
+recovery contract. A `ProviderContractViolation` requires investigation
+before further use of that endpoint.
+
+Compile and run it from the directory containing your example files. Set the
+root to your sibling checkouts; reuse these flags for the next two programs.
+
+```bash
+EDP_SOURCE_ROOT=/path/to/EDP-checkouts
+includes=()
+for library in Serial System Logging Platform Platform-Portable Memory Threading Clock BoundedTopology; do
+    includes+=("-I$EDP_SOURCE_ROOT/EDP-$library/src")
+done
+g++ -std=c++20 -pthread "${includes[@]}" byte-writes.cpp -o byte-writes
+./byte-writes
+```
+
+### 4. Add a complete EDLG frame
+
+Save this as `framed-output.cpp`. The pump copies the encoded payload into
+its own fixed frame storage before returning `Queued`, then retains that
+frame and its exact accepted prefix across service calls.
+
+```cpp
+#include "MemoryEndpoint.hpp"
+#include <serial/EdlgFramePump.hpp>
+#include <logging/EdlgFrameReader.hpp>
+
+int main() {
+    namespace Serial = ESPressio::Serial;
+    namespace Logging = ESPressio::Logging;
+    Tutorial::MemoryEndpoint endpoint{};
+    Serial::EdlgFramePump<16U> pump{};
+    const ESPressio::Platform::Portable::Memory::ByteOperationsProvider copy{};
+    const std::array<std::byte, 2U> json{
+        std::byte{'{'}, std::byte{'}'}
+    };
+
+    const auto started = pump.Begin(
+        Logging::EdlgCodec::Json,
+        json,
+        copy
+    );
+    if (started != Serial::EdlgPumpBeginStatus::Queued) {
+        return 1;
+    }
+
+    endpoint.PauseNextWrite();
+    const auto first = pump.Pump(endpoint);
+    if (first.Status != Serial::EdlgPumpStatus::WouldBlock || !pump.IsPending()) {
+        return 2;
+    }
+
+    // On the next service opportunity, the same pump retains the frame/suffix.
+    const auto resumed = pump.Pump(endpoint);
+    if (!resumed.IsComplete() || pump.IsPending()) {
+        return 3;
+    }
+
+    Logging::EdlgFrameView decoded{};
+    return Logging::ReadEdlgFrame(
+        endpoint.Captured(),
+        decoded,
+        16U
+    ) == Logging::EdlgFrameReadResult::Succeeded &&
+        decoded.Codec == Logging::EdlgCodec::Json &&
+        decoded.Payload.size() == json.size() ? 0 : 4;
+}
+```
+
+The two JSON bytes `{}` illustrate framing; they are not a generated
+15-field diagnostic LogRecord. The example also validates the captured frame's
+CRC and payload boundary with Logging's reader.
+
+```bash
+g++ -std=c++20 -pthread "${includes[@]}" framed-output.cpp -o framed-output
+./framed-output
+```
+
+Reserve the whole endpoint exclusively until the pending frame completes.
+A new `Begin` returns `Busy` while a frame is pending. After a provider
+failure, retain the pump and follow the recovery contract rather than starting
+another frame over an uncertain stream. See [EDLG Frame Pump](./docs/EDLG-FRAME-PUMP.MD).
+
+### 5. Add a bounded output queue
+
+Save this as `queued-output.cpp`. This host composition reuses a real
+Portable mutex and SpinLock through the existing Threading adapter. The queue
+holds at most two payloads of at most 16 bytes each. It creates no worker;
+the application supplies the service context calling `PumpNext`.
+
+```cpp
+#include "MemoryEndpoint.hpp"
+#include <ESPressio_Platform_Portable.hpp>
+#include <ESPressio_Threading.hpp>
+#include <serial/BoundedEdlgFrameQueue.hpp>
+
+/// Separates this queue's ordinary mutex from other application mutexes.
+struct OutputQueueIdentity final {};
+
+int main() {
+    namespace Serial = ESPressio::Serial;
+    namespace Logging = ESPressio::Logging;
+    namespace Portable = ESPressio::Platform::Portable;
+    using OutputMutex = ESPressio::Threading::OrdinaryMutexProvider<
+        OutputQueueIdentity,
+        Portable::Synchronization::MutexProvider
+    >;
+
+    // Declare borrowed owners first so they outlive the queue.
+    OutputMutex mutex{};
+    Portable::Synchronization::SpinLockProvider stateLock{};
+    Serial::BoundedEdlgFrameQueue<
+        2U,
+        16U,
+        OutputMutex,
+        Portable::Synchronization::SpinLockProvider
+    > output(
+        mutex,
+        stateLock
+    );
+    Tutorial::MemoryEndpoint endpoint{};
+    const std::array<std::byte, 2U> json{
+        std::byte{'{'}, std::byte{'}'}
+    };
+
+    const auto offered = output.TryEnqueue(
+        Logging::EdlgCodec::Json,
+        json
+    );
+    if (offered.Status != Serial::EdlgQueueOfferStatus::Queued) {
+        return 1;
+    }
+
+    endpoint.PauseNextWrite();
+    const auto first = output.PumpNext(endpoint);
+    if (first.Status != Serial::EdlgQueuePumpStatus::WouldBlock ||
+        output.Depth() != 1U) {
+        return 2;
+    }
+
+    // One application-owned service context retries the retained oldest frame.
+    const auto resumed = output.PumpNext(endpoint);
+    return resumed.Status == Serial::EdlgQueuePumpStatus::Complete &&
+        resumed.FrameCompleted && output.Depth() == 0U &&
+        !output.IsPoisoned() ? 0 : 3;
+}
+```
+
+```bash
+g++ -std=c++20 -pthread "${includes[@]}" queued-output.cpp -o queued-output
+./queued-output
+```
+
+On embedded targets, select the native qualified synchronization providers
+instead of the host Portable synchronization used here. Keep the providers,
+queue and endpoint alive until pending output has been reconciled.
+
+Check every admission and pump result. Capacity exhaustion, mutex contention
+and provider failures are distinct outcomes. Native mutex-release failure
+poisons the queue; the structured result can report a frame admitted or
+completed before that failure. Avoid blind resubmission, which could duplicate
+output. [Bounded EDLG Frame Queue](./docs/BOUNDED-EDLG-FRAME-QUEUE.MD)
+defines these outcomes and the ownership rules.
+
+### 6. Select a real ESP32 UART endpoint
+
+For an ESP-IDF or compatible IDF-backed Arduino-ESP32 application, add
+[EDP-Serial-ESP-IDF](https://github.com/ESPressio-Development-Platform/EDP-Serial-ESP-IDF).
+Bootstrap must configure its chosen UART's pins and baud, install the driver
+with **TX software ring-buffer size zero**, and own the port exclusively.
+The provider does not perform this setup.
+
+After that setup, replace the memory endpoint in the byte-writing example:
+
+```cpp
+#include <ESPressio_Serial_ESP_IDF.hpp>
+
+// Inside the application, after UART1 has been configured and installed:
+ESPressio::Serial::ESP_IDF::UartFifoByteStreamWriter endpoint(UART_NUM_1);
+const auto result = ESPressio::Serial::TryWriteComplete(
+    endpoint,
+    message
+);
+```
+
+Use the same endpoint in the pump or queue examples. Adapt the host examples'
+`main` entry point to the selected framework and select native synchronization
+for a concurrent queue. The concrete provider's
+[three-target UART example](https://github.com/ESPressio-Development-Platform/EDP-Serial-ESP-IDF/tree/main/demos/UartFifoByteStreamWriter)
+documents the hardware setup. Other console writers must not bypass the
+queue on the same UART. Generic `EDP-Serial-Arduino` remains a placeholder.
 
 ## Dependencies
 
-The default PlatformIO package resolves its EDP-System dependency from `main`.
-
-The default `ESPressio_Serial.hpp` imports **only EDP-System** through its static Composition Framework. The opt-in frame pump and queue introduce additional direct dependencies **only when their corresponding headers are explicitly imported**, and application manifests must declare these rather than relying on transitive discovery.
+`ESPressio_Serial.hpp` requires EDP-System. Additional edges are imposed by
+the exact optional headers below; installing the minimal package does not
+activate them.
 
 ```text
-EDP-Serial [default abstract ByteEndpoint]
-└── EDP-System [mandatory Composition; no further EDP dependencies]
-
-EDP-Serial [only when <serial/EdlgFramePump.hpp> is imported]
-├── EDP-System [mandatory default]
-└── EDP-Logging [conditional canonical EDLG; core umbrella has no EDP dependency]
-
-EDP-Serial [only when <serial/BoundedEdlgFrameQueue.hpp> is imported]
-├── EDP-System [mandatory default]
-├── EDP-Logging [conditional canonical EDLG; no reverse edge]
-├── EDP-Platform [conditional short independent SpinLock; depth/poison]
+EDP-Serial
+├── EDP-System [mandatory: default byte endpoint and Composition]
+├── EDP-Logging [optional: import EdlgFramePump.hpp or BoundedEdlgFrameQueue.hpp]
+│   └── EDP-Memory [imposed by Logging's EdlgFrameWriter.hpp]
+│       ├── EDP-System
+│       ├── EDP-Platform
+│       │   └── EDP-System
+│       └── EDP-BoundedTopology
+├── EDP-Platform-Portable [optional: import BoundedEdlgFrameQueue.hpp]
+│   ├── EDP-Platform
+│   │   └── EDP-System
+│   └── EDP-Memory
+│       ├── EDP-System
+│       ├── EDP-Platform
+│       │   └── EDP-System
+│       └── EDP-BoundedTopology
+├── EDP-Platform [optional: import BoundedEdlgFrameQueue.hpp]
 │   └── EDP-System
-└── EDP-Threading [conditional ordinary keyed Mutex]
+└── EDP-Threading [optional: import BoundedEdlgFrameQueue.hpp]
     ├── EDP-System
     ├── EDP-Platform
     │   └── EDP-System
@@ -39,50 +415,24 @@ EDP-Serial [only when <serial/BoundedEdlgFrameQueue.hpp> is imported]
         └── EDP-BoundedTopology
 ```
 
-All owner versions remain **0.1.0**. EDP-Serial-ESP-IDF is an optional **downstream concrete**, not a dependency of the abstract Serial owner. See the complete [Dependency Graph](./DEPENDENCY_GRAPH.MD) for module-level activation and [Wiki Dependency Contracts](./wiki/Dependency-Contracts.md) for provider invariants.
+The queue's Portable header is included even when a custom fifth template
+argument supplies byte copying, so that header dependency remains imposed.
+The pump accepts a caller-selected Memory-compatible byte provider; the
+tutorial selects Portable explicitly at the application boundary.
 
-## Public API
+Concrete Serial providers depend on EDP-Serial. The abstract library never
+imports them. See the complete [Dependency Graph](./DEPENDENCY_GRAPH.MD)
+for header activation and application-only provider edges.
 
-`#include <ESPressio_Serial.hpp>` imports `<serial/ByteEndpoint.hpp>`. The `ESPressio::Serial` domain exposes a unique EDP-System Composition-selected provider (the *only* direct EDP library dependency):
+## Documentation and examples
 
-- `ByteWriteStatus`: `Accepted`, `WouldBlock`, `ProviderFailure`
-- `ByteWriteResult`: provider status and exact `BytesAccepted` count for an offered borrowed byte range
-- `Domain`, exclusive `ByteStreamWriter` capability and `ByteStreamWriterRequirement`: EDP-System Composition requires exactly one selected same-domain provider
-- `ByteWriteEndpoint<T>`: C++20 compile-time requirement that a selected EDP-System Composition provider advertise `ByteStreamWriter` and have `ByteWriteResult TryWrite(span<const byte>) noexcept`
-- `WriteAttemptStatus`: `Complete`, `WouldBlock`, `ProviderFailure`, `ProviderContractViolation`
-- `WriteAttemptResult`: exact validated accepted prefix and strong outcome; `IsComplete()` predicate
-- `TryWriteComplete(endpoint, borrowedBytes)`: attempt to consume the range without sleeps, polling, unbounded retry or owned memory. Each Accepted step advances at least one byte. WouldBlock or provider failure returns immediately, preserving valid prefix progress. An invalid provider result (zero progress Accepted, oversized count, nonzero WouldBlock, unknown status) fails closed.
+- [Architecture and byte endpoint contract](./docs/ARCHITECTURE.MD)
+- [EDLG Frame Pump](./docs/EDLG-FRAME-PUMP.MD)
+- [Bounded EDLG Frame Queue](./docs/BOUNDED-EDLG-FRAME-QUEUE.MD)
+- [Three-target demo projects](./demos/README.MD): Arduino IDE, PlatformIO Arduino-ESP32 and PlatformIO ESP-IDF
+- [Developer Wiki](./wiki/Home.md), [API reference](./wiki/Public-API.md) and [build/test guidance](./wiki/Build-Test-and-Source.md)
+- [Changelog](./CHANGELOG.md) and [Apache-2.0 license](./LICENSE)
 
-**Truthful semantics:** `BytesAccepted` means the provider accepted bytes, **not** that another computer received them or that UART/DMA/CDC hardware flushed or persisted them. Failure may leave an already-sent prefix in flight; no rollback is claimed. The algorithm has at most `bytes.size()` provider calls on a non-empty input.
-
-**Concurrency:** this is NOT a multiproducer frame atomic sink. The application must compose exclusive ownership/EDP-Threading serialization around an endpoint and handle partial writes across possible interleavers. An EDP-Logging Serial sink must own complete EDLG frames/queued output, and its UART/USB provider must expose capabilities via Bootstrap.
-
-## Optional complete-frame EDLG Serial sink bridge (partial)
-
-The optional header `<serial/EdlgFramePump.hpp>` composes the **canonical EDP-Logging EDLG frame writer** with this library's own bounded `ByteWriteEndpoint` consumer. It owns one fixed-size complete frame (header/CRC/payload/trailer) across partial native writes and preserves exact accepted-prefix progress across `WouldBlock` or provider failures. `Begin` rejects a new record while a frame is pending, so no record is silently replaced. `Pump` never retries WouldBlock or assumes that accepted bytes reached the host. The application MUST reserve the **whole physical/USB endpoint exclusively across all pump calls**: another writer could still interleave bytes otherwise.
-
-This feature activates a **conditional direct EDP-Serial→EDP-Logging source dependency** ONLY when the header is imported by the application; `ESPressio_Serial.hpp` and the default `library.json` dependency on EDP-System remain unchanged. **No Logging→Serial reverse dependency**. It is NOT a concrete Arduino/ESP-IDF UART sink, complete-frame arbitration, secure archive or HIL proof. GCC/Clang host PASS and Xtensa syntax-only PASS on RPI400, see [optional EDLG frame pump](docs/EDLG-FRAME-PUMP.MD), [Wiki](wiki/Reference-serial-EdlgFramePump.md), and [Dependencies](DEPENDENCY_GRAPH.MD). Run `EDP_LOGGING_SOURCE_DIR=/path/to/EDP-Logging EDP_SYSTEM_SOURCE_DIR=/path/to/EDP-System CXX=g++ bash tests/run_logging_frame_host_tests.sh` (also `clang++`).
-
-## Optional bounded FIFO of complete EDLG frames (additional Serial tranche)
-
-`serial/BoundedEdlgFrameQueue.hpp` composes the **existing EDP-Logging EDLG writer**, the EDP-Serial `EdlgFramePump`, an **EDP-Threading composition-selected ordinary Mutex** for frame/output ownership, and a separately **application-selected EDP-Platform SpinLock** for independent very-short status snapshots and terminal poison publication into a fixed-capacity, noncopyable FIFO of complete framed records. Multiple producer Tasks attempt admission through one native `TryAcquire`/NoWait; one application worker `PumpNext` sends the exact oldest frame byte suffix until completed before emitting bytes from a later frame. Native lock/provider failures are explicit, including truthful "queued but lock release failed" and "frame completed but lock release failed" flags; Mutex-release failure permanently poisons the queue and prevents unsafe reuse. Source is conditional, not imported by the default umbrella.
-
-**Qualification boundary:** only participants of **one** queue are serialized; direct UART `printf`, a second queue, native CDC output or some other writer bypassing this queue could still interleave bytes. No automatic worker, task shutdown/seal, physical delivery/durability, automatic instantiation of any Arduino/ESP-IDF Serial backend, or hard real-time bounds are claimed. GCC/Clang native concurrency and CRC tests PASS RPI400 `20261016T085921-068e380e`; Xtensa C++20 syntax-only PASS `20261016T090015-492b0459`. See [bounded FIFO](docs/BOUNDED-EDLG-FRAME-QUEUE.MD), [Wiki](wiki/Reference-serial-BoundedEdlgFrameQueue.md), [Dependency Graph](DEPENDENCY_GRAPH.MD). Run with `EDP_SERIAL_DEPENDENCY_ROOT` to the pinned EDP owner checkouts and `EDP_LOGGING_SOURCE_DIR` to actual Logging source: `CXX=g++ bash tests/run-bounded-edlg-queue-tests.sh`, repeat with Clang.
-
-## Tests
-
-C++20 strict host suite: `CXX=g++ bash tests/run_host_tests.sh`, repeat with `CXX=clang++`. Fake providers exercise empty input, partial progression, WouldBlock, provider failure after partial progress and invalid-contract reports. Existing strict host tests passed against the exact selected source and the post-Logging-main downstream matrix. New three-layout examples for all three logical features are under [demos](demos/README.MD); target builds and native physical Serial capture remain separate acceptance evidence and must not be inferred merely from committed example source. Existing `main` remains a stub until guarded qualification/promotion.
-
-[Architecture](docs/ARCHITECTURE.MD) • [Dependencies](DEPENDENCY_GRAPH.MD) • [Wiki](wiki/Home.md)
-
-## Release integration and examples — 12 November 2026
-
-The [three V2 demo families](demos/README.MD) demonstrate the exact bounded byte endpoint, EDLG frame pump and ordinary-keyed FIFO contracts, each with Arduino IDE, PlatformIO Arduino-ESP32 and PlatformIO ESP-IDF source entry points. They use **memory-only fake endpoint providers**: this is intentionally not a real UART peripheral/USB output demonstration. Native provider selection belongs to the application and concrete repository. `EDP-Serial-Arduino` is currently a placeholder; do not infer an Arduino Serial concrete from these examples. The ESP-IDF UART concrete is separately implemented under `EDP-Serial-ESP-IDF`.
-
-The [changelog](CHANGELOG.md), [full dependency graph](DEPENDENCY_GRAPH.MD), [normative architecture](docs/ARCHITECTURE.MD), [Wiki API](wiki/Public-API.md) and [build evidence](wiki/Build-Test-and-Source.md) describe the 0.1.0 contract. No release tag is created by these documentation updates. A passing source build establishes syntax/link compatibility on that selected target, not native FIFO drain, connected peer receipt, duration bounds, security or physical PowerLoss durability.
-
-The EDLG pump's `Begin(codec, payload, byteOperations)` borrows an
-application-selected EDP-Memory ByteOperations provider during framing.
-The optional FIFO uses a compile-time byte-copy provider and defaults to
-the existing EDP-Platform-Portable provider. Install those owners and
-their declared dependencies for the opt-in pump and queue demos.
+The maintained byte, frame and queue demos use memory endpoints. They
+demonstrate API behavior without claiming UART delivery. Physical UART
+qualification belongs to the concrete provider/application's recorded scope.

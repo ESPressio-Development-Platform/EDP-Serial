@@ -12,4 +12,4 @@
 
 The API makes **no** assumptions about UART hardware, USB/CDC, ISR access, DMA buffer ownership, clock deadlines, platform target, logging schema, frame atomicity, and does not claim data was flushed. Caller must handle both partial prefix and later retry; do not interleave with another writer until the complete frame is accounted for.
 
-**Tests:** `tests/ByteEndpointTests.cpp`, runner `tests/run_host_tests.sh`. Strict host C++20 fake providers verify empty, multi-step partial, WouldBlock, partial failure, no-progress Accepted and oversized/malformed results. Target firmware and real Serial backend unavailable.
+**Tests:** `tests/ByteEndpointTests.cpp`, runner `tests/run_host_tests.sh`. Strict host C++20 fake providers verify empty, multi-step partial, WouldBlock, partial failure, no-progress Accepted and oversized/malformed results. Target builds and native UART application evidence are tracked separately in [Build and test qualification](Build-Test-and-Source); these host cases alone do not establish them.

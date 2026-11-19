@@ -1,6 +1,6 @@
 # serial/SerialComposition.hpp
 
-**PUBLIC EDP-System composition domain and capability declarations**, package version `0.1.0`, feature branch `feature/logging-v1`.
+**PUBLIC EDP-System composition domain and capability declarations**, package version `0.1.0`, branch `main`.
 
 - `Serial::Framework`: alias of `ESPressio::System::CompositionFramework`, never a distinct Composition system.
 - `Serial::Domain final : Framework::Domain`: platform-neutral byte endpoint capability domain.
